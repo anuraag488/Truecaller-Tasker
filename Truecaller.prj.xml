@@ -63,9 +63,9 @@ Properties
 	<Project sr="proj0" ve="2">
 		<cdate>1640337609404</cdate>
 		<name>Truecaller</name>
-		<pids>656,655,657</pids>
-		<scenes>Truecaller Setting,Truecaller,[WIP] Call Log</scenes>
-		<tids>695,587,500,481,506,603,635,595,398,636,396,131,641,319,609,620,596,337,290,637,488,652,633,650,614,692,653,613,687,663,688,646,629,388,617,651</tids>
+		<pids>655,656,657</pids>
+		<scenes>Truecaller,[WIP] Call Log,Truecaller Setting</scenes>
+		<tids>636,609,650,481,653,596,337,488,620,652,637,663,688,131,635,500,692,595,290,587,603,388,396,629,613,398,633,695,506,614,646,617,651,319,687,641</tids>
 		<tsort>Alpha</tsort>
 		<Kid sr="Kid">
 			<launchID>652</launchID>
@@ -1274,7 +1274,7 @@ Reddit - u/anuraag488</d>
 	</Scene>
 	<Task sr="task131">
 		<cdate>1661473443116</cdate>
-		<edate>1661661380298</edate>
+		<edate>1661665238545</edate>
 		<id>131</id>
 		<nme>Truecaller - Setting</nme>
 		<pri>102</pri>
@@ -2096,7 +2096,7 @@ The text that was retrieved from the dialog&lt;/_array_net.dinglisch.android.tas
 		</Action>
 		<Action sr="act170" ve="7">
 			<code>130</code>
-			<Str sr="arg0" ve="3">Truecaller - Main Task</Str>
+			<Str sr="arg0" ve="3">Truecaller - Launch Task</Str>
 			<Int sr="arg1">
 				<var>%priority-1</var>
 			</Int>
@@ -2487,7 +2487,7 @@ The label of the button that was clicked&lt;/_array_net.dinglisch.android.tasker
 		</Action>
 		<Action sr="act213" ve="7">
 			<code>37</code>
-			<coll>false</coll>
+			<coll>true</coll>
 			<ConditionList sr="if">
 				<Condition sr="c0" ve="3">
 					<lhs>1</lhs>
@@ -2703,7 +2703,7 @@ The label of the button that was clicked&lt;/_array_net.dinglisch.android.tasker
 		</Action>
 		<Action sr="act239" ve="7">
 			<code>37</code>
-			<coll>false</coll>
+			<coll>true</coll>
 			<ConditionList sr="if">
 				<Condition sr="c0" ve="3">
 					<lhs>1</lhs>
@@ -3605,7 +3605,7 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 		</Action>
 		<Action sr="act78" ve="7">
 			<code>37</code>
-			<coll>false</coll>
+			<coll>true</coll>
 			<ConditionList sr="if">
 				<Condition sr="c0" ve="3">
 					<lhs>%caller1</lhs>
@@ -5580,9 +5580,9 @@ The text that was inserted in the dialog&lt;/_array_net.dinglisch.android.tasker
 	</Task>
 	<Task sr="task596">
 		<cdate>1644294040388</cdate>
-		<edate>1661610446621</edate>
+		<edate>1661665211064</edate>
 		<id>596</id>
-		<nme>Truecaller - Main Task</nme>
+		<nme>Truecaller - Launch Task</nme>
 		<pri>100</pri>
 		<Action sr="act0" ve="7">
 			<code>130</code>
@@ -5686,8 +5686,8 @@ The text that was inserted in the dialog&lt;/_array_net.dinglisch.android.tasker
 			</ConditionList>
 		</Action>
 		<Img sr="icn" ve="2">
-			<nme>mw_action_perm_identity</nme>
-			<tint>-278483</tint>
+			<nme>mw_action_launch</nme>
+			<tint>-1</tint>
 		</Img>
 		<ProfileVariable sr="pv0">
 			<clearout>false</clearout>
@@ -6221,7 +6221,7 @@ The text that was inserted in the dialog&lt;/_array_net.dinglisch.android.tasker
 	</Task>
 	<Task sr="task633">
 		<cdate>1658124621312</cdate>
-		<edate>1661650772360</edate>
+		<edate>1661665169396</edate>
 		<id>633</id>
 		<nme>[WIP] Call Log</nme>
 		<pri>10</pri>
@@ -8878,10 +8878,6 @@ WHERE value = '%number' and type = 'Block'</Str>
 			<Int sr="arg0" val="0"/>
 			<Str sr="arg1" ve="3"/>
 		</Action>
-		<Img sr="icn" ve="2">
-			<nme>mw_action_view_quilt</nme>
-			<tint>-16777216</tint>
-		</Img>
 	</Task>
 	<Task sr="task635">
 		<cdate>1660302056782</cdate>
@@ -10586,7 +10582,7 @@ The label of the button that was clicked&lt;/_array_net.dinglisch.android.tasker
 	</Task>
 	<Task sr="task652">
 		<cdate>1563784289316</cdate>
-		<edate>1661578192095</edate>
+		<edate>1661665179013</edate>
 		<id>652</id>
 		<nme>Truecaller - Database Query</nme>
 		<pri>100</pri>
@@ -11523,10 +11519,6 @@ data = JSON.stringify(data,null,1)</Str>
 			<Str sr="arg8" ve="3"/>
 			<Str sr="arg9" ve="3"/>
 		</Action>
-		<Img sr="icn" ve="2">
-			<nme>mw_content_save</nme>
-			<tint>-278483</tint>
-		</Img>
 	</Task>
 	<Task sr="task653">
 		<cdate>1657767836861</cdate>
