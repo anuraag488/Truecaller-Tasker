@@ -63,9 +63,9 @@ Properties
 	<Project sr="proj0" ve="2">
 		<cdate>1640337609404</cdate>
 		<name>Truecaller</name>
-		<pids>655,656,657</pids>
-		<scenes>Truecaller,[WIP] Call Log,Truecaller Setting</scenes>
-		<tids>636,609,650,481,653,596,337,488,620,652,637,663,688,131,635,500,692,595,290,587,603,388,396,629,613,398,633,695,506,614,646,617,651,319,687,641</tids>
+		<pids>655,657,656</pids>
+		<scenes>Truecaller,Truecaller Setting,[WIP] Call Log</scenes>
+		<tids>131,653,663,587,636,506,609,629,635,500,695,481,637,646,290,652,692,595,620,319,596,650,396,614,613,398,603,633,388,688,687,337,617,651,641,488</tids>
 		<tsort>Alpha</tsort>
 		<Kid sr="Kid">
 			<launchID>652</launchID>
@@ -1277,7 +1277,7 @@ Reddit - u/anuraag488</d>
 		<edate>1661665238545</edate>
 		<id>131</id>
 		<nme>Truecaller - Setting</nme>
-		<pri>102</pri>
+		<pri>101</pri>
 		<rty>1</rty>
 		<Action sr="act0" ve="7">
 			<code>548</code>
@@ -5580,7 +5580,7 @@ The text that was inserted in the dialog&lt;/_array_net.dinglisch.android.tasker
 	</Task>
 	<Task sr="task596">
 		<cdate>1644294040388</cdate>
-		<edate>1661665211064</edate>
+		<edate>1661665390869</edate>
 		<id>596</id>
 		<nme>Truecaller - Launch Task</nme>
 		<pri>100</pri>
@@ -6221,10 +6221,10 @@ The text that was inserted in the dialog&lt;/_array_net.dinglisch.android.tasker
 	</Task>
 	<Task sr="task633">
 		<cdate>1658124621312</cdate>
-		<edate>1661665169396</edate>
+		<edate>1661665373159</edate>
 		<id>633</id>
 		<nme>[WIP] Call Log</nme>
-		<pri>10</pri>
+		<pri>103</pri>
 		<rty>1</rty>
 		<Action sr="act0" ve="7">
 			<code>549</code>
@@ -7354,21 +7354,15 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 			<label>ui or launch</label>
 			<ConditionList sr="if">
 				<bool0>Or</bool0>
-				<bool1>Or</bool1>
 				<Condition sr="c0" ve="3">
 					<lhs>%caller1</lhs>
 					<op>4</op>
-					<rhs>ui$</rhs>
+					<rhs>(ui|Launch Task)$</rhs>
 				</Condition>
 				<Condition sr="c1" ve="3">
 					<lhs>%caller2</lhs>
-					<op>2</op>
-					<rhs>launch</rhs>
-				</Condition>
-				<Condition sr="c2" ve="3">
-					<lhs>%caller1</lhs>
 					<op>4</op>
-					<rhs>Main</rhs>
+					<rhs>(?i)launch</rhs>
 				</Condition>
 			</ConditionList>
 		</Action>
