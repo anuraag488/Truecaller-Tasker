@@ -64,8 +64,8 @@ Properties
 		<cdate>1640337609404</cdate>
 		<name>Truecaller</name>
 		<pids>657,656,655</pids>
-		<scenes>[WIP] Call Log,Truecaller Setting,Truecaller</scenes>
-		<tids>633,650,500,653,637,596,695,587,646,488,652,595,613,687,481,319,337,398,609,617,629,635,131,692,688,663,651,614,620,396,636,290,506,603,388,641</tids>
+		<scenes>Truecaller,Truecaller Setting,[WIP] Call Log</scenes>
+		<tids>633,653,635,652,609,388,595,506,481,614,587,663,131,692,650,500,688,636,637,695,290,629,613,337,646,620,398,596,617,603,319,687,651,488,396,641</tids>
 		<tsort>Alpha</tsort>
 		<Kid sr="Kid">
 			<launchID>596</launchID>
@@ -1276,10 +1276,10 @@ Reddit - u/anuraag488</d>
 	</Scene>
 	<Task sr="task131">
 		<cdate>1661473443116</cdate>
-		<edate>1661694996506</edate>
+		<edate>1661702435153</edate>
 		<id>131</id>
 		<nme>Truecaller - Setting</nme>
-		<pri>102</pri>
+		<pri>8</pri>
 		<rty>1</rty>
 		<Action sr="act0" ve="7">
 			<code>548</code>
@@ -4999,10 +4999,10 @@ The text that was inserted in the dialog&lt;/_array_net.dinglisch.android.tasker
 	</Task>
 	<Task sr="task596">
 		<cdate>1644294040388</cdate>
-		<edate>1661667695296</edate>
+		<edate>1661702351141</edate>
 		<id>596</id>
 		<nme>Truecaller - Launch Task</nme>
-		<pri>7</pri>
+		<pri>100</pri>
 		<Action sr="act0" ve="7">
 			<code>130</code>
 			<Str sr="arg0" ve="3">Truecaller - Helper</Str>
@@ -5640,10 +5640,10 @@ The text that was inserted in the dialog&lt;/_array_net.dinglisch.android.tasker
 	</Task>
 	<Task sr="task633">
 		<cdate>1658124621312</cdate>
-		<edate>1661695002699</edate>
+		<edate>1661702601970</edate>
 		<id>633</id>
 		<nme>[WIP] Call Log</nme>
-		<pri>106</pri>
+		<pri>102</pri>
 		<rty>1</rty>
 		<Action sr="act0" ve="7">
 			<code>549</code>
@@ -6634,13 +6634,6 @@ The label of the button that was clicked&lt;/_array_net.dinglisch.android.tasker
 			</ConditionList>
 		</Action>
 		<Action sr="act189" ve="7">
-			<code>357</code>
-			<Str sr="arg0" ve="3">%list</Str>
-		</Action>
-		<Action sr="act19" ve="7">
-			<code>38</code>
-		</Action>
-		<Action sr="act190" ve="7">
 			<code>667</code>
 			<on>false</on>
 			<Int sr="arg0" val="0"/>
@@ -6661,7 +6654,10 @@ ORDER BY timestamp DESC</Str>
 			<Str sr="arg8" ve="3">%truecaller</Str>
 			<Int sr="arg9" val="0"/>
 		</Action>
-		<Action sr="act191" ve="7">
+		<Action sr="act19" ve="7">
+			<code>38</code>
+		</Action>
+		<Action sr="act190" ve="7">
 			<code>667</code>
 			<Int sr="arg0" val="0"/>
 			<Str sr="arg1" ve="3">%dbpath</Str>
@@ -6681,9 +6677,9 @@ ORDER BY timestamp DESC</Str>
 			<Str sr="arg8" ve="3">%truecaller</Str>
 			<Int sr="arg9" val="0"/>
 		</Action>
-		<Action sr="act192" ve="7">
+		<Action sr="act191" ve="7">
 			<code>37</code>
-			<coll>false</coll>
+			<coll>true</coll>
 			<ConditionList sr="if">
 				<Condition sr="c0" ve="3">
 					<lhs>%truecaller(#)</lhs>
@@ -6692,12 +6688,12 @@ ORDER BY timestamp DESC</Str>
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act193" ve="7">
+		<Action sr="act192" ve="7">
 			<code>396</code>
 			<Bundle sr="arg0">
 				<Vals sr="val">
-					<net.dinglisch.android.tasker.RELEVANT_VARIABLES>&lt;StringArray sr=""&gt;&lt;_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES0&gt;%truecaller_list
-0. Truecaller list
+					<net.dinglisch.android.tasker.RELEVANT_VARIABLES>&lt;StringArray sr=""&gt;&lt;_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES0&gt;%list
+0. List
 Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES0&gt;&lt;_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES1&gt;%truecaller_names
 0. Truecaller names
 Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES1&gt;&lt;_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES2&gt;%truecaller_numbers
@@ -6715,10 +6711,10 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 			<Int sr="arg1" val="1"/>
 			<Str sr="arg2" ve="3">%truecaller(+
 )</Str>
-			<Str sr="arg3" ve="3">(?&lt;truecaller_names&gt;.*),(?&lt;truecaller_numbers&gt;.*),(?&lt;truecaller_list&gt;.*)</Str>
+			<Str sr="arg3" ve="3">(?&lt;truecaller_names&gt;.*),(?&lt;truecaller_numbers&gt;.*),(?&lt;list&gt;.*)</Str>
 			<Str sr="arg4" ve="3">$number=:=$name</Str>
 		</Action>
-		<Action sr="act194" ve="7">
+		<Action sr="act193" ve="7">
 			<code>393</code>
 			<on>false</on>
 			<Bundle sr="arg0">
@@ -6737,16 +6733,24 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 			<Str sr="arg5" ve="3">%truecaller_list</Str>
 			<Str sr="arg6" ve="3">=:=</Str>
 		</Action>
-		<Action sr="act195" ve="7">
+		<Action sr="act194" ve="7">
 			<code>354</code>
+			<on>false</on>
 			<Str sr="arg0" ve="3">%list</Str>
 			<Str sr="arg1" ve="3">%truecaller_list(+=:=)</Str>
 			<Str sr="arg2" ve="3">=:=</Str>
 		</Action>
+		<Action sr="act195" ve="7">
+			<code>43</code>
+		</Action>
 		<Action sr="act196" ve="7">
-			<code>38</code>
+			<code>357</code>
+			<Str sr="arg0" ve="3">%list</Str>
 		</Action>
 		<Action sr="act197" ve="7">
+			<code>38</code>
+		</Action>
+		<Action sr="act198" ve="7">
 			<code>135</code>
 			<Int sr="arg0" val="1"/>
 			<Int sr="arg1" val="1"/>
@@ -6759,13 +6763,10 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act198" ve="7">
+		<Action sr="act199" ve="7">
 			<code>137</code>
 			<Int sr="arg0" val="0"/>
 			<Str sr="arg1" ve="3"/>
-		</Action>
-		<Action sr="act199" ve="7">
-			<code>38</code>
 		</Action>
 		<Action sr="act2" ve="7">
 			<code>37</code>
@@ -6797,10 +6798,13 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 			</ConditionList>
 		</Action>
 		<Action sr="act200" ve="7">
+			<code>38</code>
+		</Action>
+		<Action sr="act201" ve="7">
 			<code>300</code>
 			<label>call log</label>
 		</Action>
-		<Action sr="act201" ve="7">
+		<Action sr="act202" ve="7">
 			<code>37</code>
 			<coll>true</coll>
 			<ConditionList sr="if">
@@ -6811,11 +6815,12 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act202" ve="7">
+		<Action sr="act203" ve="7">
 			<code>357</code>
+			<on>false</on>
 			<Str sr="arg0" ve="3">%list</Str>
 		</Action>
-		<Action sr="act203" ve="7">
+		<Action sr="act204" ve="7">
 			<code>667</code>
 			<label>delete all records from call_log_table</label>
 			<Int sr="arg0" val="0"/>
@@ -6830,7 +6835,7 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 			<Str sr="arg8" ve="3">%value</Str>
 			<Int sr="arg9" val="0"/>
 		</Action>
-		<Action sr="act204" ve="7">
+		<Action sr="act205" ve="7">
 			<code>667</code>
 			<Int sr="arg0" val="2"/>
 			<Str sr="arg1" ve="3">content://call_log/calls</Str>
@@ -6844,7 +6849,7 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 			<Str sr="arg8" ve="3">%call_log</Str>
 			<Int sr="arg9" val="0"/>
 		</Action>
-		<Action sr="act205" ve="7">
+		<Action sr="act206" ve="7">
 			<code>37</code>
 			<coll>true</coll>
 			<ConditionList sr="if">
@@ -6855,7 +6860,7 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act206" ve="7">
+		<Action sr="act207" ve="7">
 			<code>547</code>
 			<Str sr="arg0" ve="3">%call_log</Str>
 			<Str sr="arg1" ve="3">%call_log(+
@@ -6866,7 +6871,7 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 			<Int sr="arg5" val="3"/>
 			<Int sr="arg6" val="1"/>
 		</Action>
-		<Action sr="act207" ve="7">
+		<Action sr="act208" ve="7">
 			<code>598</code>
 			<Str sr="arg0" ve="3">%call_log</Str>
 			<Str sr="arg1" ve="3">'</Str>
@@ -6877,7 +6882,7 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 			<Int sr="arg6" val="1"/>
 			<Str sr="arg7" ve="3">''</Str>
 		</Action>
-		<Action sr="act208" ve="7">
+		<Action sr="act209" ve="7">
 			<code>396</code>
 			<Bundle sr="arg0">
 				<Vals sr="val">
@@ -6902,24 +6907,6 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 			<Str sr="arg3" ve="3">(?&lt;call_log_dates&gt;.*)=:=(?&lt;call_log_numbers&gt;.*)=:=(?&lt;call_log_names&gt;.*)</Str>
 			<Str sr="arg4" ve="3">$number=:=$name</Str>
 		</Action>
-		<Action sr="act209" ve="7">
-			<code>393</code>
-			<Bundle sr="arg0">
-				<Vals sr="val">
-					<net.dinglisch.android.tasker.RELEVANT_VARIABLES>&lt;StringArray sr=""/&gt;</net.dinglisch.android.tasker.RELEVANT_VARIABLES>
-					<net.dinglisch.android.tasker.RELEVANT_VARIABLES-type>[Ljava.lang.String;</net.dinglisch.android.tasker.RELEVANT_VARIABLES-type>
-				</Vals>
-			</Bundle>
-			<Str sr="arg1" ve="3">%call_log_dates
-%call_log_numbers
-%call_log_names</Str>
-			<Int sr="arg2" val="1"/>
-			<Str sr="arg3" ve="3"/>
-			<Str sr="arg4" ve="3">('%call_log_dates','%call_log_numbers','%call_log_names')</Str>
-			<Str sr="arg5" ve="3">%value</Str>
-			<Str sr="arg6" ve="3">,
-</Str>
-		</Action>
 		<Action sr="act21" ve="7">
 			<code>667</code>
 			<Int sr="arg0" val="0"/>
@@ -6937,6 +6924,24 @@ WHERE number_map.number = '%number' or number_map.number_e164 = '%number'</Str>
 			<Int sr="arg9" val="0"/>
 		</Action>
 		<Action sr="act210" ve="7">
+			<code>393</code>
+			<Bundle sr="arg0">
+				<Vals sr="val">
+					<net.dinglisch.android.tasker.RELEVANT_VARIABLES>&lt;StringArray sr=""/&gt;</net.dinglisch.android.tasker.RELEVANT_VARIABLES>
+					<net.dinglisch.android.tasker.RELEVANT_VARIABLES-type>[Ljava.lang.String;</net.dinglisch.android.tasker.RELEVANT_VARIABLES-type>
+				</Vals>
+			</Bundle>
+			<Str sr="arg1" ve="3">%call_log_dates
+%call_log_numbers
+%call_log_names</Str>
+			<Int sr="arg2" val="1"/>
+			<Str sr="arg3" ve="3"/>
+			<Str sr="arg4" ve="3">('%call_log_dates','%call_log_numbers','%call_log_names')</Str>
+			<Str sr="arg5" ve="3">%value</Str>
+			<Str sr="arg6" ve="3">,
+</Str>
+		</Action>
+		<Action sr="act211" ve="7">
 			<code>667</code>
 			<label>insert</label>
 			<Int sr="arg0" val="0"/>
@@ -6952,9 +6957,10 @@ WHERE number_map.number = '%number' or number_map.number_e164 = '%number'</Str>
 			<Str sr="arg8" ve="3">%value</Str>
 			<Int sr="arg9" val="0"/>
 		</Action>
-		<Action sr="act211" ve="7">
+		<Action sr="act212" ve="7">
 			<code>667</code>
 			<label>final query</label>
+			<on>false</on>
 			<Int sr="arg0" val="0"/>
 			<Str sr="arg1" ve="3">%dbpath</Str>
 			<Int sr="arg10" val="1"/>
@@ -6991,8 +6997,9 @@ ORDER BY date DESC</Str>
 			<Str sr="arg8" ve="3">%call_log</Str>
 			<Int sr="arg9" val="0"/>
 		</Action>
-		<Action sr="act212" ve="7">
+		<Action sr="act213" ve="7">
 			<code>396</code>
+			<on>false</on>
 			<Bundle sr="arg0">
 				<Vals sr="val">
 					<net.dinglisch.android.tasker.RELEVANT_VARIABLES>&lt;StringArray sr=""&gt;&lt;_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES0&gt;%call_log_dates
@@ -7019,8 +7026,73 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 			<Str sr="arg3" ve="3">(?&lt;call_log_names&gt;.*),(?&lt;call_log_numbers&gt;.*),(?&lt;call_log_dates&gt;.*),(?&lt;call_log_list&gt;.*)</Str>
 			<Str sr="arg4" ve="3">$number=:=$name</Str>
 		</Action>
-		<Action sr="act213" ve="7">
+		<Action sr="act214" ve="7">
+			<code>667</code>
+			<label>final query</label>
+			<Int sr="arg0" val="0"/>
+			<Str sr="arg1" ve="3">%dbpath</Str>
+			<Int sr="arg10" val="1"/>
+			<Str sr="arg2" ve="3"/>
+			<Str sr="arg3" ve="3"/>
+			<Str sr="arg4" ve="3">WITH common as (SELECT 
+	CASE WHEN call_log.name = '&lt;null&gt;' THEN
+        CASE WHEN data.name IS NOT NULL THEN '🆔 ' ||data.name ELSE call_log.number END
+	WHEN call_log.name != '&lt;null&gt;' THEN call_log.name
+    END as name,
+	call_log.number as number,
+	call_log.date as date,
+data.name as tc_name,
+data.is_verified as is_verified,
+data.spam_score as spam_score
+
+FROM call_log
+
+LEFT JOIN number_map on number_map.number = call_log.number
+LEFT JOIN data on data.number_e164 = number_map.number_e164)
+
+SELECT name,
+number,
+CASE WHEN name = '🆔 '||tc_name AND is_verified = 1 THEN '&lt;b&gt;'||name||' ✅&lt;b&gt;&lt;br&gt;'||number
+WHEN name = '🆔 '||tc_name AND spam_score &gt; 0 THEN '&lt;b&gt;'||name||' 🔴&lt;b&gt;&lt;br&gt;'||number
+ELSE '&lt;b&gt;'||name||'&lt;b&gt;&lt;br&gt;'||number END || '&lt;br&gt;' || strftime('%d-%m-%Y %H:%M:%S',datetime(round(date / 1000), 'unixepoch', 'localtime'))
+FROM common
+GROUP BY number
+ORDER BY date DESC</Str>
+			<Str sr="arg5" ve="3"/>
+			<Str sr="arg6" ve="3"/>
+			<Str sr="arg7" ve="3"/>
+			<Str sr="arg8" ve="3">%call_log</Str>
+			<Int sr="arg9" val="0"/>
+		</Action>
+		<Action sr="act215" ve="7">
+			<code>396</code>
+			<Bundle sr="arg0">
+				<Vals sr="val">
+					<net.dinglisch.android.tasker.RELEVANT_VARIABLES>&lt;StringArray sr=""&gt;&lt;_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES0&gt;%call_log_names
+0. Call log names
+Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES0&gt;&lt;_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES1&gt;%call_log_numbers
+0. Call log numbers
+Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES1&gt;&lt;_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES2&gt;%list
+0. List
+Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES2&gt;&lt;_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES3&gt;%mt_groups()
+Groups
+&lt;/_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES3&gt;&lt;_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES4&gt;%mt_match_found
+Is Match
+true if there was a match, false otherwise&lt;/_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES4&gt;&lt;_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES5&gt;%mt_match
+Match
+Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES5&gt;&lt;/StringArray&gt;</net.dinglisch.android.tasker.RELEVANT_VARIABLES>
+					<net.dinglisch.android.tasker.RELEVANT_VARIABLES-type>[Ljava.lang.String;</net.dinglisch.android.tasker.RELEVANT_VARIABLES-type>
+				</Vals>
+			</Bundle>
+			<Int sr="arg1" val="1"/>
+			<Str sr="arg2" ve="3">%call_log(+
+)</Str>
+			<Str sr="arg3" ve="3">(?&lt;call_log_names&gt;.*),(?&lt;call_log_numbers&gt;.*),(?&lt;list&gt;.*)</Str>
+			<Str sr="arg4" ve="3">$number=:=$name</Str>
+		</Action>
+		<Action sr="act216" ve="7">
 			<code>393</code>
+			<on>false</on>
 			<Bundle sr="arg0">
 				<Vals sr="val">
 					<net.dinglisch.android.tasker.RELEVANT_VARIABLES>&lt;StringArray sr=""/&gt;</net.dinglisch.android.tasker.RELEVANT_VARIABLES>
@@ -7037,39 +7109,19 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 			<Str sr="arg5" ve="3">%call_log_list</Str>
 			<Str sr="arg6" ve="3">=:=</Str>
 		</Action>
-		<Action sr="act214" ve="7">
+		<Action sr="act217" ve="7">
 			<code>354</code>
+			<on>false</on>
 			<Str sr="arg0" ve="3">%list</Str>
 			<Str sr="arg1" ve="3">%call_log_list</Str>
 			<Str sr="arg2" ve="3">=:=</Str>
 		</Action>
-		<Action sr="act215" ve="7">
-			<code>38</code>
-		</Action>
-		<Action sr="act216" ve="7">
-			<code>135</code>
-			<Int sr="arg0" val="1"/>
-			<Int sr="arg1" val="1"/>
-			<Str sr="arg2" ve="3">%return_to</Str>
-			<ConditionList sr="if">
-				<Condition sr="c0" ve="3">
-					<lhs>%return_to</lhs>
-					<op>12</op>
-					<rhs></rhs>
-				</Condition>
-			</ConditionList>
-		</Action>
-		<Action sr="act217" ve="7">
-			<code>137</code>
-			<Int sr="arg0" val="0"/>
-			<Str sr="arg1" ve="3"/>
-		</Action>
 		<Action sr="act218" ve="7">
-			<code>38</code>
+			<code>43</code>
 		</Action>
 		<Action sr="act219" ve="7">
-			<code>300</code>
-			<label>options text update</label>
+			<code>357</code>
+			<Str sr="arg0" ve="3">%list</Str>
 		</Action>
 		<Action sr="act22" ve="7">
 			<code>547</code>
@@ -7082,6 +7134,34 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 			<Int sr="arg6" val="1"/>
 		</Action>
 		<Action sr="act220" ve="7">
+			<code>38</code>
+		</Action>
+		<Action sr="act221" ve="7">
+			<code>135</code>
+			<Int sr="arg0" val="1"/>
+			<Int sr="arg1" val="1"/>
+			<Str sr="arg2" ve="3">%return_to</Str>
+			<ConditionList sr="if">
+				<Condition sr="c0" ve="3">
+					<lhs>%return_to</lhs>
+					<op>12</op>
+					<rhs></rhs>
+				</Condition>
+			</ConditionList>
+		</Action>
+		<Action sr="act222" ve="7">
+			<code>137</code>
+			<Int sr="arg0" val="0"/>
+			<Str sr="arg1" ve="3"/>
+		</Action>
+		<Action sr="act223" ve="7">
+			<code>38</code>
+		</Action>
+		<Action sr="act224" ve="7">
+			<code>300</code>
+			<label>options text update</label>
+		</Action>
+		<Action sr="act225" ve="7">
 			<code>37</code>
 			<coll>true</coll>
 			<ConditionList sr="if">
@@ -7092,7 +7172,7 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act221" ve="7">
+		<Action sr="act226" ve="7">
 			<code>547</code>
 			<on>false</on>
 			<Str sr="arg0" ve="3">%return_to</Str>
@@ -7103,14 +7183,14 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 			<Int sr="arg5" val="3"/>
 			<Int sr="arg6" val="1"/>
 		</Action>
-		<Action sr="act222" ve="7">
+		<Action sr="act227" ve="7">
 			<code>135</code>
 			<on>false</on>
 			<Int sr="arg0" val="1"/>
 			<Int sr="arg1" val="1"/>
 			<Str sr="arg2" ve="3">options show</Str>
 		</Action>
-		<Action sr="act223" ve="7">
+		<Action sr="act228" ve="7">
 			<code>549</code>
 			<label>options text update1</label>
 			<on>false</on>
@@ -7119,57 +7199,10 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 			<Int sr="arg2" val="0"/>
 			<Int sr="arg3" val="0"/>
 		</Action>
-		<Action sr="act224" ve="7">
-			<code>65</code>
-			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
-			<Str sr="arg1" ve="3">Options</Str>
-			<Int sr="arg2" val="1"/>
-			<Int sr="arg3" val="0"/>
-			<Int sr="arg4" val="0"/>
-		</Action>
-		<Action sr="act225" ve="7">
-			<code>65</code>
-			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
-			<Str sr="arg1" ve="3">Options Button Delete</Str>
-			<Int sr="arg2" val="1"/>
-			<Int sr="arg3" val="0"/>
-			<Int sr="arg4" val="0"/>
-			<ConditionList sr="if">
-				<Condition sr="c0" ve="3">
-					<lhs>%label</lhs>
-					<op>2</op>
-					<rhs>Truecaller</rhs>
-				</Condition>
-			</ConditionList>
-		</Action>
-		<Action sr="act226" ve="7">
-			<code>65</code>
-			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
-			<Str sr="arg1" ve="3">Options Button Search</Str>
-			<Int sr="arg2" val="1"/>
-			<Int sr="arg3" val="0"/>
-			<Int sr="arg4" val="0"/>
-		</Action>
-		<Action sr="act227" ve="7">
-			<code>65</code>
-			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
-			<Str sr="arg1" ve="3">Options Text</Str>
-			<Int sr="arg2" val="1"/>
-			<Int sr="arg3" val="0"/>
-			<Int sr="arg4" val="0"/>
-		</Action>
-		<Action sr="act228" ve="7">
-			<code>65</code>
-			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
-			<Str sr="arg1" ve="3">Options Button Call</Str>
-			<Int sr="arg2" val="1"/>
-			<Int sr="arg3" val="0"/>
-			<Int sr="arg4" val="0"/>
-		</Action>
 		<Action sr="act229" ve="7">
 			<code>65</code>
 			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
-			<Str sr="arg1" ve="3">Options Button Sms</Str>
+			<Str sr="arg1" ve="3">Options</Str>
 			<Int sr="arg2" val="1"/>
 			<Int sr="arg3" val="0"/>
 			<Int sr="arg4" val="0"/>
@@ -7196,12 +7229,59 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 		<Action sr="act230" ve="7">
 			<code>65</code>
 			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
+			<Str sr="arg1" ve="3">Options Button Delete</Str>
+			<Int sr="arg2" val="1"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+			<ConditionList sr="if">
+				<Condition sr="c0" ve="3">
+					<lhs>%label</lhs>
+					<op>2</op>
+					<rhs>Truecaller</rhs>
+				</Condition>
+			</ConditionList>
+		</Action>
+		<Action sr="act231" ve="7">
+			<code>65</code>
+			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
+			<Str sr="arg1" ve="3">Options Button Search</Str>
+			<Int sr="arg2" val="1"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+		</Action>
+		<Action sr="act232" ve="7">
+			<code>65</code>
+			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
+			<Str sr="arg1" ve="3">Options Text</Str>
+			<Int sr="arg2" val="1"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+		</Action>
+		<Action sr="act233" ve="7">
+			<code>65</code>
+			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
+			<Str sr="arg1" ve="3">Options Button Call</Str>
+			<Int sr="arg2" val="1"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+		</Action>
+		<Action sr="act234" ve="7">
+			<code>65</code>
+			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
+			<Str sr="arg1" ve="3">Options Button Sms</Str>
+			<Int sr="arg2" val="1"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+		</Action>
+		<Action sr="act235" ve="7">
+			<code>65</code>
+			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
 			<Str sr="arg1" ve="3">Options Button Block</Str>
 			<Int sr="arg2" val="1"/>
 			<Int sr="arg3" val="0"/>
 			<Int sr="arg4" val="0"/>
 		</Action>
-		<Action sr="act231" ve="7">
+		<Action sr="act236" ve="7">
 			<code>667</code>
 			<Int sr="arg0" val="2"/>
 			<Str sr="arg1" ve="3">content://com.android.contacts/phone_lookup/%number</Str>
@@ -7215,7 +7295,7 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 			<Str sr="arg8" ve="3">%contacts</Str>
 			<Int sr="arg9" val="0"/>
 		</Action>
-		<Action sr="act232" ve="7">
+		<Action sr="act237" ve="7">
 			<code>65</code>
 			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
 			<Str sr="arg1" ve="3">Options Button Save</Str>
@@ -7230,7 +7310,22 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act233" ve="7">
+		<Action sr="act238" ve="7">
+			<code>65</code>
+			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
+			<Str sr="arg1" ve="3">Options Button Save</Str>
+			<Int sr="arg2" val="0"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+			<ConditionList sr="if">
+				<Condition sr="c0" ve="3">
+					<lhs>%contacts(#)</lhs>
+					<op>7</op>
+					<rhs>0</rhs>
+				</Condition>
+			</ConditionList>
+		</Action>
+		<Action sr="act239" ve="7">
 			<code>51</code>
 			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
 			<Str sr="arg1" ve="3">Options Text</Str>
@@ -7239,7 +7334,22 @@ Can also be accessed as an array&lt;/_array_net.dinglisch.android.tasker.RELEVAN
 Number: %number</Str>
 			<Str sr="arg4" ve="3"/>
 		</Action>
-		<Action sr="act234" ve="7">
+		<Action sr="act24" ve="7">
+			<code>667</code>
+			<Int sr="arg0" val="0"/>
+			<Str sr="arg1" ve="3">%dbpath</Str>
+			<Int sr="arg10" val="1"/>
+			<Str sr="arg2" ve="3"/>
+			<Str sr="arg3" ve="3"/>
+			<Str sr="arg4" ve="3">DELETE from data
+WHERE number_e164 = '%number'</Str>
+			<Str sr="arg5" ve="3"/>
+			<Str sr="arg6" ve="3"/>
+			<Str sr="arg7" ve="3"/>
+			<Str sr="arg8" ve="3">%value</Str>
+			<Int sr="arg9" val="0"/>
+		</Action>
+		<Action sr="act240" ve="7">
 			<code>130</code>
 			<Str sr="arg0" ve="3">Truecaller - Database Query</Str>
 			<Int sr="arg1">
@@ -7262,7 +7372,7 @@ Number: %number</Str>
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act235" ve="7">
+		<Action sr="act241" ve="7">
 			<code>130</code>
 			<Str sr="arg0" ve="3">Truecaller - Database Query</Str>
 			<Int sr="arg1">
@@ -7285,7 +7395,7 @@ Number: %number</Str>
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act236" ve="7">
+		<Action sr="act242" ve="7">
 			<code>137</code>
 			<label>stop on error</label>
 			<Int sr="arg0" val="0"/>
@@ -7304,7 +7414,7 @@ Number: %number</Str>
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act237" ve="7">
+		<Action sr="act243" ve="7">
 			<code>37</code>
 			<coll>true</coll>
 			<ConditionList sr="if">
@@ -7315,7 +7425,7 @@ Number: %number</Str>
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act238" ve="7">
+		<Action sr="act244" ve="7">
 			<code>51</code>
 			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
 			<Str sr="arg1" ve="3">Options Text</Str>
@@ -7337,7 +7447,7 @@ Number: %number</Str>
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act239" ve="7">
+		<Action sr="act245" ve="7">
 			<code>51</code>
 			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
 			<Str sr="arg1" ve="3">Options Text</Str>
@@ -7359,22 +7469,7 @@ Number: %number</Str>
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act24" ve="7">
-			<code>667</code>
-			<Int sr="arg0" val="0"/>
-			<Str sr="arg1" ve="3">%dbpath</Str>
-			<Int sr="arg10" val="1"/>
-			<Str sr="arg2" ve="3"/>
-			<Str sr="arg3" ve="3"/>
-			<Str sr="arg4" ve="3">DELETE from data
-WHERE number_e164 = '%number'</Str>
-			<Str sr="arg5" ve="3"/>
-			<Str sr="arg6" ve="3"/>
-			<Str sr="arg7" ve="3"/>
-			<Str sr="arg8" ve="3">%value</Str>
-			<Int sr="arg9" val="0"/>
-		</Action>
-		<Action sr="act240" ve="7">
+		<Action sr="act246" ve="7">
 			<code>37</code>
 			<coll>false</coll>
 			<ConditionList sr="if">
@@ -7391,7 +7486,7 @@ WHERE number_e164 = '%number'</Str>
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act241" ve="7">
+		<Action sr="act247" ve="7">
 			<code>51</code>
 			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
 			<Str sr="arg1" ve="3">Options Text</Str>
@@ -7408,7 +7503,7 @@ Truecaller Name: %json.name ✅</Str>
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act242" ve="7">
+		<Action sr="act248" ve="7">
 			<code>43</code>
 			<ConditionList sr="if">
 				<Condition sr="c0" ve="3">
@@ -7418,7 +7513,7 @@ Truecaller Name: %json.name ✅</Str>
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act243" ve="7">
+		<Action sr="act249" ve="7">
 			<code>51</code>
 			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
 			<Str sr="arg1" ve="3">Options Text</Str>
@@ -7432,84 +7527,6 @@ Truecaller Name: %json.name 🔴</Str>
 					<lhs>%name</lhs>
 					<op>3</op>
 					<rhs>🆔 %json.name</rhs>
-				</Condition>
-			</ConditionList>
-		</Action>
-		<Action sr="act244" ve="7">
-			<code>43</code>
-			<ConditionList sr="if">
-				<Condition sr="c0" ve="3">
-					<lhs>%json.name</lhs>
-					<op>12</op>
-					<rhs></rhs>
-				</Condition>
-			</ConditionList>
-		</Action>
-		<Action sr="act245" ve="7">
-			<code>51</code>
-			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
-			<Str sr="arg1" ve="3">Options Text</Str>
-			<Int sr="arg2" val="0"/>
-			<Str sr="arg3" ve="3">Name: %name
-Number: %number
-Truecaller Name: %json.name</Str>
-			<Str sr="arg4" ve="3"/>
-			<ConditionList sr="if">
-				<Condition sr="c0" ve="3">
-					<lhs>%name</lhs>
-					<op>3</op>
-					<rhs>🆔 %json.name</rhs>
-				</Condition>
-			</ConditionList>
-		</Action>
-		<Action sr="act246" ve="7">
-			<code>38</code>
-		</Action>
-		<Action sr="act247" ve="7">
-			<code>51</code>
-			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
-			<Str sr="arg1" ve="3">Options Text</Str>
-			<Int sr="arg2" val="2"/>
-			<Str sr="arg3" ve="3">
-Carrier: %json.carrier</Str>
-			<Str sr="arg4" ve="3"/>
-			<ConditionList sr="if">
-				<Condition sr="c0" ve="3">
-					<lhs>%json.carrier</lhs>
-					<op>12</op>
-					<rhs></rhs>
-				</Condition>
-			</ConditionList>
-		</Action>
-		<Action sr="act248" ve="7">
-			<code>51</code>
-			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
-			<Str sr="arg1" ve="3">Options Text</Str>
-			<Int sr="arg2" val="2"/>
-			<Str sr="arg3" ve="3">
-City: %json.city</Str>
-			<Str sr="arg4" ve="3"/>
-			<ConditionList sr="if">
-				<Condition sr="c0" ve="3">
-					<lhs>%json.city</lhs>
-					<op>12</op>
-					<rhs></rhs>
-				</Condition>
-			</ConditionList>
-		</Action>
-		<Action sr="act249" ve="7">
-			<code>51</code>
-			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
-			<Str sr="arg1" ve="3">Options Text</Str>
-			<Int sr="arg2" val="2"/>
-			<Str sr="arg3" ve="3">
-Address: %json.address</Str>
-			<Str sr="arg4" ve="3"/>
-			<ConditionList sr="if">
-				<Condition sr="c0" ve="3">
-					<lhs>%json.address</lhs>
-					<op>12</op>
-					<rhs></rhs>
 				</Condition>
 			</ConditionList>
 		</Action>
@@ -7529,6 +7546,84 @@ WHERE number_e164 = '%number'</Str>
 			<Int sr="arg9" val="0"/>
 		</Action>
 		<Action sr="act250" ve="7">
+			<code>43</code>
+			<ConditionList sr="if">
+				<Condition sr="c0" ve="3">
+					<lhs>%json.name</lhs>
+					<op>12</op>
+					<rhs></rhs>
+				</Condition>
+			</ConditionList>
+		</Action>
+		<Action sr="act251" ve="7">
+			<code>51</code>
+			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
+			<Str sr="arg1" ve="3">Options Text</Str>
+			<Int sr="arg2" val="0"/>
+			<Str sr="arg3" ve="3">Name: %name
+Number: %number
+Truecaller Name: %json.name</Str>
+			<Str sr="arg4" ve="3"/>
+			<ConditionList sr="if">
+				<Condition sr="c0" ve="3">
+					<lhs>%name</lhs>
+					<op>3</op>
+					<rhs>🆔 %json.name</rhs>
+				</Condition>
+			</ConditionList>
+		</Action>
+		<Action sr="act252" ve="7">
+			<code>38</code>
+		</Action>
+		<Action sr="act253" ve="7">
+			<code>51</code>
+			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
+			<Str sr="arg1" ve="3">Options Text</Str>
+			<Int sr="arg2" val="2"/>
+			<Str sr="arg3" ve="3">
+Carrier: %json.carrier</Str>
+			<Str sr="arg4" ve="3"/>
+			<ConditionList sr="if">
+				<Condition sr="c0" ve="3">
+					<lhs>%json.carrier</lhs>
+					<op>12</op>
+					<rhs></rhs>
+				</Condition>
+			</ConditionList>
+		</Action>
+		<Action sr="act254" ve="7">
+			<code>51</code>
+			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
+			<Str sr="arg1" ve="3">Options Text</Str>
+			<Int sr="arg2" val="2"/>
+			<Str sr="arg3" ve="3">
+City: %json.city</Str>
+			<Str sr="arg4" ve="3"/>
+			<ConditionList sr="if">
+				<Condition sr="c0" ve="3">
+					<lhs>%json.city</lhs>
+					<op>12</op>
+					<rhs></rhs>
+				</Condition>
+			</ConditionList>
+		</Action>
+		<Action sr="act255" ve="7">
+			<code>51</code>
+			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
+			<Str sr="arg1" ve="3">Options Text</Str>
+			<Int sr="arg2" val="2"/>
+			<Str sr="arg3" ve="3">
+Address: %json.address</Str>
+			<Str sr="arg4" ve="3"/>
+			<ConditionList sr="if">
+				<Condition sr="c0" ve="3">
+					<lhs>%json.address</lhs>
+					<op>12</op>
+					<rhs></rhs>
+				</Condition>
+			</ConditionList>
+		</Action>
+		<Action sr="act256" ve="7">
 			<code>51</code>
 			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
 			<Str sr="arg1" ve="3">Options Text</Str>
@@ -7544,10 +7639,10 @@ Spam Reports: %spam_score</Str>
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act251" ve="7">
+		<Action sr="act257" ve="7">
 			<code>38</code>
 		</Action>
-		<Action sr="act252" ve="7">
+		<Action sr="act258" ve="7">
 			<code>135</code>
 			<Int sr="arg0" val="1"/>
 			<Int sr="arg1" val="1"/>
@@ -7560,52 +7655,10 @@ Spam Reports: %spam_score</Str>
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act253" ve="7">
+		<Action sr="act259" ve="7">
 			<code>137</code>
 			<Int sr="arg0" val="0"/>
 			<Str sr="arg1" ve="3"/>
-		</Action>
-		<Action sr="act254" ve="7">
-			<code>38</code>
-		</Action>
-		<Action sr="act255" ve="7">
-			<code>300</code>
-			<label>options hide</label>
-		</Action>
-		<Action sr="act256" ve="7">
-			<code>37</code>
-			<coll>true</coll>
-			<ConditionList sr="if">
-				<Condition sr="c0" ve="3">
-					<lhs>1</lhs>
-					<op>2</op>
-					<rhs>1</rhs>
-				</Condition>
-			</ConditionList>
-		</Action>
-		<Action sr="act257" ve="7">
-			<code>65</code>
-			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
-			<Str sr="arg1" ve="3">Options</Str>
-			<Int sr="arg2" val="0"/>
-			<Int sr="arg3" val="0"/>
-			<Int sr="arg4" val="0"/>
-		</Action>
-		<Action sr="act258" ve="7">
-			<code>65</code>
-			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
-			<Str sr="arg1" ve="3">Options Button Delete</Str>
-			<Int sr="arg2" val="0"/>
-			<Int sr="arg3" val="0"/>
-			<Int sr="arg4" val="0"/>
-		</Action>
-		<Action sr="act259" ve="7">
-			<code>65</code>
-			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
-			<Str sr="arg1" ve="3">Options Button Search</Str>
-			<Int sr="arg2" val="0"/>
-			<Int sr="arg3" val="0"/>
-			<Int sr="arg4" val="0"/>
 		</Action>
 		<Action sr="act26" ve="7">
 			<code>547</code>
@@ -7618,33 +7671,27 @@ Spam Reports: %spam_score</Str>
 			<Int sr="arg6" val="1"/>
 		</Action>
 		<Action sr="act260" ve="7">
-			<code>65</code>
-			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
-			<Str sr="arg1" ve="3">Options Text</Str>
-			<Int sr="arg2" val="0"/>
-			<Int sr="arg3" val="0"/>
-			<Int sr="arg4" val="0"/>
+			<code>38</code>
 		</Action>
 		<Action sr="act261" ve="7">
-			<code>65</code>
-			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
-			<Str sr="arg1" ve="3">Options Button Block</Str>
-			<Int sr="arg2" val="0"/>
-			<Int sr="arg3" val="0"/>
-			<Int sr="arg4" val="0"/>
+			<code>300</code>
+			<label>options hide</label>
 		</Action>
 		<Action sr="act262" ve="7">
-			<code>65</code>
-			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
-			<Str sr="arg1" ve="3">Options Button Sms</Str>
-			<Int sr="arg2" val="0"/>
-			<Int sr="arg3" val="0"/>
-			<Int sr="arg4" val="0"/>
+			<code>37</code>
+			<coll>true</coll>
+			<ConditionList sr="if">
+				<Condition sr="c0" ve="3">
+					<lhs>1</lhs>
+					<op>2</op>
+					<rhs>1</rhs>
+				</Condition>
+			</ConditionList>
 		</Action>
 		<Action sr="act263" ve="7">
 			<code>65</code>
 			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
-			<Str sr="arg1" ve="3">Options Button Call</Str>
+			<Str sr="arg1" ve="3">Options</Str>
 			<Int sr="arg2" val="0"/>
 			<Int sr="arg3" val="0"/>
 			<Int sr="arg4" val="0"/>
@@ -7652,12 +7699,66 @@ Spam Reports: %spam_score</Str>
 		<Action sr="act264" ve="7">
 			<code>65</code>
 			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
-			<Str sr="arg1" ve="3">Options Button Save</Str>
+			<Str sr="arg1" ve="3">Options Button Delete</Str>
 			<Int sr="arg2" val="0"/>
 			<Int sr="arg3" val="0"/>
 			<Int sr="arg4" val="0"/>
 		</Action>
 		<Action sr="act265" ve="7">
+			<code>65</code>
+			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
+			<Str sr="arg1" ve="3">Options Button Search</Str>
+			<Int sr="arg2" val="0"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+		</Action>
+		<Action sr="act266" ve="7">
+			<code>65</code>
+			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
+			<Str sr="arg1" ve="3">Options Text</Str>
+			<Int sr="arg2" val="0"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+		</Action>
+		<Action sr="act267" ve="7">
+			<code>65</code>
+			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
+			<Str sr="arg1" ve="3">Options Button Block</Str>
+			<Int sr="arg2" val="0"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+		</Action>
+		<Action sr="act268" ve="7">
+			<code>65</code>
+			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
+			<Str sr="arg1" ve="3">Options Button Sms</Str>
+			<Int sr="arg2" val="0"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+		</Action>
+		<Action sr="act269" ve="7">
+			<code>65</code>
+			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
+			<Str sr="arg1" ve="3">Options Button Call</Str>
+			<Int sr="arg2" val="0"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+		</Action>
+		<Action sr="act27" ve="7">
+			<code>135</code>
+			<Int sr="arg0" val="1"/>
+			<Int sr="arg1" val="1"/>
+			<Str sr="arg2" ve="3">options hide</Str>
+		</Action>
+		<Action sr="act270" ve="7">
+			<code>65</code>
+			<Str sr="arg0" ve="3">[WIP] Call Log</Str>
+			<Str sr="arg1" ve="3">Options Button Save</Str>
+			<Int sr="arg2" val="0"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+		</Action>
+		<Action sr="act271" ve="7">
 			<code>135</code>
 			<Int sr="arg0" val="1"/>
 			<Int sr="arg1" val="1"/>
@@ -7670,19 +7771,13 @@ Spam Reports: %spam_score</Str>
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act266" ve="7">
+		<Action sr="act272" ve="7">
 			<code>137</code>
 			<Int sr="arg0" val="0"/>
 			<Str sr="arg1" ve="3"/>
 		</Action>
-		<Action sr="act267" ve="7">
+		<Action sr="act273" ve="7">
 			<code>38</code>
-		</Action>
-		<Action sr="act27" ve="7">
-			<code>135</code>
-			<Int sr="arg0" val="1"/>
-			<Int sr="arg1" val="1"/>
-			<Str sr="arg2" ve="3">options hide</Str>
 		</Action>
 		<Action sr="act28" ve="7">
 			<code>549</code>
@@ -9366,7 +9461,7 @@ The size of the response in bytes&lt;/_array_net.dinglisch.android.tasker.RELEVA
 	</Task>
 	<Task sr="task641">
 		<cdate>1658882358206</cdate>
-		<edate>1661500401620</edate>
+		<edate>1661701774175</edate>
 		<id>641</id>
 		<nme>Truecaller - Spam Database</nme>
 		<pri>6</pri>
