@@ -81,9 +81,9 @@ Properties
 	<Project sr="proj0" ve="2">
 		<cdate>1640337609404</cdate>
 		<name>Truecaller</name>
-		<pids>655,656,657,623</pids>
-		<scenes>Truecaller Setting,Truecaller,[WIP] Call Log,Truecaller Test</scenes>
-		<tids>653,641,609,633,635,650,587,619,614,603,595,481,500,652,637,396,636,319,651,337,506,290,695,388,596,688,398,692,613,488,501,620,646,629,663,617,131,687,611</tids>
+		<pids>656,655,657,623</pids>
+		<scenes>Truecaller,Truecaller Test,Truecaller Setting,[WIP] Call Log</scenes>
+		<tids>633,636,629,595,500,637,619,481,653,609,652,663,506,641,587,337,396,290,398,596,650,688,488,501,611,646,388,614,613,692,651,620,635,695,603,131,687,617,319</tids>
 		<tsort>Alpha</tsort>
 		<Kid sr="Kid">
 			<launchID>596</launchID>
@@ -5201,7 +5201,7 @@ com.hb.dialer.free</label>
 	</Task>
 	<Task sr="task596">
 		<cdate>1644294040388</cdate>
-		<edate>1662095889509</edate>
+		<edate>1662178492928</edate>
 		<id>596</id>
 		<nme>Truecaller - Launch Task</nme>
 		<pri>100</pri>
@@ -6397,7 +6397,7 @@ com.hb.dialer.free</label>
 		<edate>1662097367653</edate>
 		<id>633</id>
 		<nme>Truecaller - Call Log View</nme>
-		<pri>8</pri>
+		<pri>101</pri>
 		<rty>1</rty>
 		<Action sr="act0" ve="7">
 			<code>549</code>
@@ -11263,7 +11263,7 @@ document.getElementById("photo").src = "%image_path";
 	</Task>
 	<Task sr="task641">
 		<cdate>1658882358206</cdate>
-		<edate>1662178308397</edate>
+		<edate>1662178546964</edate>
 		<id>641</id>
 		<nme>Truecaller - Update Database</nme>
 		<pri>100</pri>
@@ -11279,6 +11279,7 @@ may be used in future</label>
 			<code>37</code>
 			<coll>true</coll>
 			<label>topspammers</label>
+			<on>false</on>
 			<ConditionList sr="if">
 				<Condition sr="c0" ve="3">
 					<lhs>1</lhs>
@@ -11289,6 +11290,7 @@ may be used in future</label>
 		</Action>
 		<Action sr="act10" ve="7">
 			<code>38</code>
+			<on>false</on>
 		</Action>
 		<Action sr="act11" ve="7">
 			<code>37</code>
@@ -11445,6 +11447,7 @@ VALUES
 		</Action>
 		<Action sr="act2" ve="7">
 			<code>339</code>
+			<on>false</on>
 			<Bundle sr="arg0">
 				<Vals sr="val">
 					<net.dinglisch.android.tasker.RELEVANT_VARIABLES>&lt;StringArray sr=""&gt;&lt;_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES0&gt;%http_cookies
@@ -11637,6 +11640,7 @@ VALUES
 		</Action>
 		<Action sr="act3" ve="7">
 			<code>598</code>
+			<on>false</on>
 			<Str sr="arg0" ve="3">%http_data</Str>
 			<Str sr="arg1" ve="3">'</Str>
 			<Int sr="arg2" val="0"/>
@@ -11651,6 +11655,7 @@ VALUES
 		</Action>
 		<Action sr="act4" ve="7">
 			<code>393</code>
+			<on>false</on>
 			<Bundle sr="arg0">
 				<Vals sr="val">
 					<net.dinglisch.android.tasker.RELEVANT_VARIABLES>&lt;StringArray sr=""/&gt;</net.dinglisch.android.tasker.RELEVANT_VARIABLES>
@@ -11669,6 +11674,7 @@ VALUES
 		</Action>
 		<Action sr="act5" ve="7">
 			<code>664</code>
+			<on>false</on>
 			<Str sr="arg0" ve="3">db</Str>
 			<Str sr="arg1" ve="3">SQLiteDatabase</Str>
 			<Str sr="arg2" ve="3">openOrCreateDatabase
@@ -11683,6 +11689,7 @@ VALUES
 		</Action>
 		<Action sr="act6" ve="7">
 			<code>664</code>
+			<on>false</on>
 			<se>false</se>
 			<Str sr="arg0" ve="3"/>
 			<Str sr="arg1" ve="3">db</Str>
@@ -11698,6 +11705,7 @@ VALUES
 		</Action>
 		<Action sr="act7" ve="7">
 			<code>664</code>
+			<on>false</on>
 			<Str sr="arg0" ve="3">%db_version</Str>
 			<Str sr="arg1" ve="3">db</Str>
 			<Str sr="arg2" ve="3">close
@@ -11713,6 +11721,7 @@ VALUES
 		<Action sr="act8" ve="7">
 			<code>667</code>
 			<label>Create topspammers Table if it doesn't exist</label>
+			<on>false</on>
 			<Int sr="arg0" val="0"/>
 			<Str sr="arg1" ve="3">%dbpath</Str>
 			<Int sr="arg10" val="1"/>
@@ -11736,6 +11745,7 @@ reports INTEGER
 		<Action sr="act9" ve="7">
 			<code>667</code>
 			<label>insert</label>
+			<on>false</on>
 			<Int sr="arg0" val="0"/>
 			<Str sr="arg1" ve="3">%dbpath</Str>
 			<Int sr="arg10" val="1"/>
