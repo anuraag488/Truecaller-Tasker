@@ -24,7 +24,7 @@
 
 ## Changelog
 
-### 2023-12-04
+### 2023-12-06
 * Added option to update own Truecaller name in general settings 3 dot menu
 * Fixed some errors
 
