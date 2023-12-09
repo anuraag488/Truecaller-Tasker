@@ -24,6 +24,10 @@
 
 ## Changelog
 
+### 2023-12-10
+* Fixed a bug when saving database on rare case
+* properly handle http request errors
+
 ### 2023-12-06
 * Added option to update own Truecaller name in general settings 3 dot menu
 * Fixed some errors
