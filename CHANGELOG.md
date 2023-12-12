@@ -24,6 +24,12 @@
 
 ## Changelog
 
+### 2023-12-12
+* Truecaller name can be edited locally from number information scene
+  * Edited name will be used for call filtering
+* Improved call log view
+* Fixed some bugs
+
 ### 2023-12-10
 * Fixed a bug when saving database on rare case
 * properly handle http request errors
