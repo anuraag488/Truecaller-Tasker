@@ -24,6 +24,10 @@
 
 ## Changelog
 
+### 2023-12-16
+* Number information scene: Clicking on image will show larger image
+* Fixed edited name not showing in call log
+
 ### 2023-12-14
 * Fixed bugs in database query task
 
