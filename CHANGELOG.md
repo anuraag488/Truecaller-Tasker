@@ -24,6 +24,9 @@
 
 ## Changelog
 
+### 2024-01-18
+* Login session is saved for reuse incase OTP Input Dialog gets dismissed.
+
 ### 2023-12-18
 * Fixed null object error when call ends
 * Clipboard profile will be disabled if Monitor Clipboard is disabled. This may fix missing permission warning.
