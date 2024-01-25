@@ -24,6 +24,9 @@
 
 ## Changelog
 
+### 2024-01-25
+* Improve login process
+
 ### 2024-01-18
 * Login session is saved for reuse incase OTP Input Dialog gets dismissed.
 
