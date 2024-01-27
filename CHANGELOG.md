@@ -25,6 +25,9 @@
 ## Changelog
 
 ### 2024-01-25
+* Some Fixes
+
+### 2024-01-25
 * Improve login process
 
 ### 2024-01-18
