@@ -25,7 +25,8 @@
 ## Changelog
 
 ### 2024-01-27
-* Some Fixes
+* Clipboard profile can be deleted to avoid missing ADB WiFi permission message
+* Some Fixes related to variables not set a structured type
 
 ### 2024-01-25
 * Improve login process
