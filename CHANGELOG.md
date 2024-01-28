@@ -1,6 +1,7 @@
 ## Features
 
 * Caller id using Truecaller database
+  * Supports WhatsApp calls and messages
   * Swipe up/down to move scene
   * Swipe left/right to destroy scene
 * Filter calls
@@ -23,6 +24,10 @@
 * Can be used as Standalone app by compiling with [App Factory](https://play.google.com/store/apps/details?id=net.dinglisch.android.appfactory)
 
 ## Changelog
+
+### 2024-01-28
+* Caller ID for WhatsApp to identify unknown  incoming call and message (Requires Notification access)
+* Limit number of records for Call Log
 
 ### 2024-01-27
 * Clipboard profile can be deleted to avoid missing ADB WiFi permission message
