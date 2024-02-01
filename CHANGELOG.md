@@ -25,6 +25,10 @@
 
 ## Changelog
 
+### 2024-02-01
+* Call log: Improved search
+* Minor fixes
+
 ### 2024-01-28
 * Caller ID for WhatsApp to identify unknown  incoming call and message (Requires Notification access)
 * Limit number of records for Call Log
