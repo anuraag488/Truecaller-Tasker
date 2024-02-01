@@ -31,7 +31,7 @@
 
 ### 2024-01-28
 * Caller ID for WhatsApp to identify unknown  incoming call and message (Requires Notification access)
-* Limit number of records for Call Log
+* Limit number of records for Call Log to 3000. Can be edited by modifying %TC_call_log_limit variable
 
 ### 2024-01-27
 * Clipboard profile can be deleted to avoid missing ADB WiFi permission message
