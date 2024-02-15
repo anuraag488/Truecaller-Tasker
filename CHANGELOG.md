@@ -25,6 +25,9 @@
 
 ## Changelog
 
+### 2024-02-15
+* Removed built-in method to get installationid
+
 ### 2024-02-01
 * Call log: Improved search
 * Minor fixes
