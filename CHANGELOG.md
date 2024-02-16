@@ -25,8 +25,9 @@
 
 ## Changelog
 
-### 2024-02-15
+### 2024-02-16
 * Removed built-in method to get installationid
+* Added separate option for WhatsApp calls and messages
 
 ### 2024-02-01
 * Call log: Improved search
