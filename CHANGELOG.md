@@ -25,6 +25,10 @@
 
 ## Changelog
 
+### 2024-02-25
+* Added Pick & hang to call block method. It will not work on roaming network or when a call is active.
+* Updated searchWarning database
+
 ### 2024-02-16
 * Removed built-in method to get installationid
 * Added separate option for WhatsApp calls and messages
