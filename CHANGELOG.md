@@ -26,7 +26,8 @@
 ## Changelog
 
 ### 2024-02-25
-* Added Pick & hang to call block method. It will not work on roaming network or when a call is active.
+* Added Pick & hang to call block method. 
+  It will not work on roaming network (disabled due to roaming charges) or when a call is active. On such cases Reject method will be used.
 * Updated searchWarning database
 
 ### 2024-02-16
