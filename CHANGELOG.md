@@ -25,6 +25,10 @@
 
 ## Changelog
 
+### 2024-03-17
+* Changed call filtering for Phonebook numbers. Previously it was filtered using Truecaller database but now it will only filtered by adding number to User Filters or Block all calls.
+* Updated searchWarning database
+
 ### 2024-02-25
 * Added Pick & hang to call block method. 
   It will not work on roaming network (disabled due to roaming charges) or when a call is active. On such cases Reject method will be used.
