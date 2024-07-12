@@ -25,6 +25,9 @@
 
 ## Changelog
 
+### 2024-07-12
+* Fixed call log scene not showing new call logs
+
 ### 2024-03-17
 * Changed call filtering for Phonebook numbers. Previously it was filtered using Truecaller database but now it will only filtered by adding number to User Filters or Block all calls.
 * Updated searchWarning database
