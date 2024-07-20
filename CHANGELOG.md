@@ -25,6 +25,9 @@
 
 ## Changelog
 
+### 2024-07-20
+* Fixed Search
+
 ### 2024-07-12
 * Fixed call log scene not showing new call logs
 
