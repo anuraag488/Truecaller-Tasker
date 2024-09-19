@@ -25,6 +25,11 @@
 
 ## Changelog
 
+### 2024-09-19
+* Call log scene menu will not reload when a number is deleted from number information scene
+* Added long tap actions to call log scene menu to quickly do some actions without querying truecaller database
+* Added option to clear Call log and Truecaller log in call log scene
+
 ### 2024-08-23
 * Fixed Search
 
