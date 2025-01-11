@@ -25,9 +25,10 @@
 
 ## Changelog
 
-### 2025-01-07
+### 2025-01-11
 * Fixed an error in number information scene
 * Call log: Fixed search box becoming empty when typing
+* Call log: many sql queries changes
 * Updated searchWarning database
 
 ### 2024-09-19
