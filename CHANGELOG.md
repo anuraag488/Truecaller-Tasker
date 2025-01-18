@@ -25,6 +25,10 @@
 
 ## Changelog
 
+### 2025-01-19
+* Call log: Fixed a bug where name is returning empty
+* Added support for WhatsApp Business
+
 ### 2025-01-16
 * Added call log update support for ACR Phone, Fossify Phone
 
