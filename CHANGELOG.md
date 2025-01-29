@@ -29,6 +29,7 @@
 * Call log: Switched to Webview from Menu.
 * Call log: Search box Switched to Webview from Textedit.
 * Call log: Added support for showing contact images if available.
+* Call log: Improved searching on device contacts.
 * Number Information Task can now be run from anywhere like launcher shortcut, qstile.
 * Callerid: Changes to scene layout.
 
