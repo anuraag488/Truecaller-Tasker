@@ -25,6 +25,13 @@
 
 ## Changelog
 
+### 2025-01-29
+* Call log: Switched to Webview from Menu.
+* Call log: Search box Switched to Webview from Textedit.
+* Call log: Added support for showing contact images if available.
+* Number Information Task can now be run from anywhere like launcher shortcut, qstile.
+* Callerid: Changes to scene layout.
+
 ### 2025-01-19
 * Call log: Fixed a bug where name is returning empty
 * Added support for WhatsApp Business
