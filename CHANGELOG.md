@@ -25,9 +25,8 @@
 
 ## Changelog
 
-### 2025-01-29
-* Call log: Switched to Webview from Menu.
-* Call log: Search box Switched to Webview from Textedit.
+### 2025-01-31
+* Call log: Switched to Webview.
 * Call log: Added support for showing contact images if available.
 * Call log: Improved searching on device contacts.
 * Number Information Task can now be run from anywhere like launcher shortcut, qstile.
