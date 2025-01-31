@@ -31,6 +31,7 @@
 * Call log: Improved searching on device contacts.
 * Number Information Task can now be run from anywhere like launcher shortcut, qstile.
 * Callerid: Changes to scene layout.
+* Fixed bugs.
 
 ### 2025-01-19
 * Call log: Fixed a bug where name is returning empty
