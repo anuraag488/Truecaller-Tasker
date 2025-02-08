@@ -25,6 +25,11 @@
 
 ## Changelog
 
+### 2025-02-08
+* Switched All Scenes to Webview.
+* Added option to show notification when a sms recieved from unsaved number.
+* Number Information scene: Added Contact Via button.
+
 ### 2025-01-31
 * Call log: Switched to Webview.
 * Call log: Added support for showing contact images if available.
