@@ -25,6 +25,12 @@
 
 ## Changelog
 
+### 2025-02-27
+* Call log: Fixed long tapping call log tab not clearing call log cache
+* Call log: Added a workaround for Scene freezes when multiple delete operations are performed
+* Fixed some functions not working on lower Android builds.
+* Some fixes.
+
 ### 2025-02-08
 * Switched All Scenes to Webview.
 * Added option to show notification when a sms recieved from unsaved number.
@@ -86,7 +92,7 @@
 
 ### 2024-01-27
 * Clipboard profile can be deleted to avoid missing ADB WiFi permission message
-* Some Fixes related to variables not set a structured type
+* Some Fixes related to variables not set to structured type
 
 ### 2024-01-25
 * Improve login process
