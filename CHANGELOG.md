@@ -26,6 +26,7 @@
 ## Changelog
 
 ### 2025-02-27
+* Run Launch Task with %par1=powermenu to show scene on Lock screen. Can be used with Device Control action and Command event.
 * Call log: Fixed long tapping call log tab not clearing call log cache
 * Call log: Added a workaround for Scene freezes when multiple delete operations are performed
 * Fixed some functions not working on lower Android builds.
