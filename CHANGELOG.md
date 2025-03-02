@@ -25,6 +25,9 @@
 
 ## Changelog
 
+### 2025-02-03
+* Fixed an issue which caused Block or Unblock of number not working with Number information scene.
+
 ### 2025-02-27
 * Run Launch Task with %par1=powermenu to show scene on Lock screen. Can be used with Device Control action and Command event.
 * Call log: Fixed long tapping call log tab not clearing call log cache
