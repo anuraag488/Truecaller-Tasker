@@ -25,6 +25,9 @@
 
 ## Changelog
 
+### 2025-02-07
+* Fixed database file not getting created.
+
 ### 2025-02-03
 * Fixed an issue which caused Block or Unblock of number not working with Number information scene.
 
