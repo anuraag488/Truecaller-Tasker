@@ -25,6 +25,10 @@
 
 ## Changelog
 
+### 2025-04-01
+* Added option to take note in Number Information Scene.
+* Fixed Number Information Task throwing error when launched from launcher.
+
 ### 2025-02-07
 * Fixed database file not getting created.
 
