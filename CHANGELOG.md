@@ -25,6 +25,11 @@
 
 ## Changelog
 
+### 2025-05-06
+* Call log: Notes will be visible in log
+* Call log: Notes can be searched
+* Updated searchWarning database
+
 ### 2025-04-01
 * Added option to take note in Number Information Scene.
 * Fixed Number Information Task throwing error when launched from launcher.
