@@ -25,6 +25,10 @@
 
 ## Changelog
 
+### 2025-05-11
+* Fixed notes getting disappeared
+* Improved Search
+
 ### 2025-05-06
 * Call log: Notes will be visible in log
 * Call log: Notes can be searched
