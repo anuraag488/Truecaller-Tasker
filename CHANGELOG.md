@@ -25,6 +25,9 @@
 
 ## Changelog
 
+### 2025-06-12
+* Updated searchWarning database
+
 ### 2025-05-11
 * Fixed notes getting disappeared
 * Improved Search
