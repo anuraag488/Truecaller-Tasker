@@ -25,6 +25,11 @@
 
 ## Changelog
 
+### 2025-07-15
+* Fixed Tags database not updating
+* Updated searchWarning database
+* Some fixes
+
 ### 2025-06-12
 * Updated searchWarning database
 
