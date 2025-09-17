@@ -25,6 +25,9 @@
 
 ## Changelog
 
+### 2025-09-17
+* Revamped all scenes
+
 ### 2025-07-15
 * Fixed Tags database not updating
 * Updated searchWarning database
