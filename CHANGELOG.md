@@ -25,6 +25,9 @@
 
 ## Changelog
 
+### 2025-10-05
+* Fixed some issues where spam reports not visible in callerid scene
+
 ### 2025-09-17
 * Revamped all scenes
 
@@ -252,3 +255,4 @@
 
 * Added Notification caller id
 * Added Missed Call Notification
+
