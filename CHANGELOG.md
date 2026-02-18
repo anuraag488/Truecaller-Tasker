@@ -25,6 +25,10 @@
 
 ## Changelog
 
+### 2026-02-18
+* Switched to Java Code action
+* Updated searchWarning database
+
 ### 2025-10-05
 * Fixed some issues where spam reports not visible in callerid scene
 
