@@ -11,11 +11,11 @@
   * Block Calls by name like name containing spam, fraud etc
   * Block Private calls
   * Block unsaved numbers
-* Call log Scene to view device call logs
+* Call log Task to view device call logs
   * Long Tap Call logs tab to force refresh call log
-* Settings Scene to change some options
-* Call Filter Scene to configure call blocking options
-* Number Information Scene to view information about a number
+* Settings Task to change some options
+* User Filter Task to configure call blocking options
+* Number Information Task to view information about a number
   * SMS button: LongTap to open in WhatsApp
   * Delete button: Tap to delete number from current tab and LongTap to delete from both tabs
 * Missed call notification for unknown number
