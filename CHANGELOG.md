@@ -2,8 +2,8 @@
 
 * Caller id using Truecaller database
   * Supports WhatsApp calls and messages
-  * Swipe up/down to move scene
-  * Swipe left/right to destroy scene
+  * Swipe up/down to move Overlay
+  * Swipe left/right to remove Overlay
 * Filter calls
   * Allow selected numbers or name
   * Block all calls
