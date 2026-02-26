@@ -25,6 +25,10 @@
 
 ## Changelog
 
+### 2026-02-26
+* Added option to copy number
+* Fixed some issues
+
 ### 2026-02-18
 * Switched to Java Code action
 * Updated searchWarning database
