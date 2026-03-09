@@ -19,7 +19,7 @@
   * SMS button: LongTap to open in WhatsApp
   * Delete button: Tap to delete number from current tab and LongTap to delete from both tabs
 * Missed call notification for unknown number
-* Monitors Clipboard for numbers (Requires ADB WiFi or Root)
+* Monitors Clipboard for numbers (Requires Shizuku, ADB WiFi or Root)
 * Update device call logs for when default dialer is True Phone, ACR Phone, Fossify Phone, Right Dialer, Simple Dialer
 * Can be used as Standalone app by compiling with [App Factory](https://play.google.com/store/apps/details?id=net.dinglisch.android.appfactory)
 
