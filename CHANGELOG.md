@@ -25,6 +25,12 @@
 
 ## Changelog
 
+### 2026-04-16
+* Dropped support below Android 10. Now Tasker needs to set as default Call Screening app
+* Clipboard bubble is now draggable anywhere on screen
+* Added Received Share event for getting number details
+* Updated searchWarning database
+
 ### 2026-02-26
 * Added option to copy number
 * Fixed some issues
