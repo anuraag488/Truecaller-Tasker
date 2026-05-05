@@ -25,6 +25,10 @@
 
 ## Changelog
 
+### 2026-05-05
+* Call log and contact photos will load from Android content provider. Dropped call_log and contact_photos table.
+* Show last call type icon in call log
+
 ### 2026-04-16
 * Dropped support below Android 10. Now Tasker needs to set as default Call Screening app
 * Clipboard bubble is now draggable anywhere on screen
