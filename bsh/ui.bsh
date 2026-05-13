@@ -1,0 +1,2755 @@
+import android.app.AlertDialog;
+import android.app.Dialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.content.res.ColorStateList;
+import android.content.res.Configuration;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Rect;
+import android.graphics.Typeface;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.Editable;
+import android.text.TextUtils;
+import android.text.TextWatcher;
+import android.util.DisplayMetrics;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.RadioButton;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import coil.ImageLoader;
+import coil.disk.DiskCache;
+import coil.memory.MemoryCache;
+import coil.request.ImageRequest;
+import coil.transform.CircleCropTransformation;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.WeakHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+ui() {
+    u = util();
+    d = data();
+
+    LONG_PRESS_DELAY = 500;
+    mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    executorService = Executors.newCachedThreadPool();
+    
+    themeColors = new HashMap();
+    colorCache = new HashMap();
+
+    getColorInt(key) {
+        cached = colorCache.get(key);
+        if (cached != null) return cached;
+        colorStr = themeColors.get(key);
+        colorInt = Color.parseColor(colorStr != null ? colorStr : "#000000");
+        colorCache.put(key, colorInt);
+        return colorInt;
+    }
+    
+    getColorString(key) {
+        colorStr = themeColors.get(key);
+        return colorStr != null ? colorStr : "#000000";
+    }
+
+    getThemeColor(key) {
+        color = themeColors.get(key);
+        return color != null ? color : "#000000";
+    }
+
+    imageLoader = null;
+    disposableMap = new WeakHashMap();
+    
+    setupCoilImageLoader() {
+        try {
+            cacheDir = new File(context.getExternalCacheDir(), "image_cache");
+            if (!cacheDir.exists()) cacheDir.mkdirs();
+            try {
+                diskCache = new DiskCache.Builder()
+                    .directory(cacheDir)
+                    .maxSizeBytes(200L * 1024L * 1024L)
+                    .build();
+            } catch (Exception e) {
+                u.logToFile("DiskCache locked, falling back to memory only: " + e.getMessage());
+                diskCache = null;
+            }
+            
+            memoryCache = new MemoryCache.Builder(context)
+                .maxSizePercent(0.25)
+                .build();
+            
+            builder = new ImageLoader.Builder(context).memoryCache(memoryCache).allowHardware(false);
+            if (diskCache != null) builder.diskCache(diskCache);
+            imageLoader = builder.build();
+        } catch (Exception e) {
+            u.logToFile("Error setting up Coil: " + e.getMessage());
+        }
+    }
+    
+    setupCoilImageLoader();
+    
+    onSettingsClosed = null;
+
+    cancelImageLoad(imageView) {
+        existingDisposable = disposableMap.get(imageView);
+        if (existingDisposable != null) {
+            try { existingDisposable.dispose(); } catch (Exception e) {}
+            disposableMap.remove(imageView);
+        }
+    }
+
+    loadIconAsync(iconUrl, iconView) {
+        if (!u.isValidString(iconUrl)) return;
+        cancelImageLoad(iconView);
+        request = new ImageRequest.Builder(context)
+            .data(iconUrl)
+            .target(iconView)
+            .allowHardware(false)
+            .build();
+        disposable = imageLoader.enqueue(request);
+        disposableMap.put(iconView, disposable);
+    }
+
+    createInitialBitmap(name, sizeDp) {
+        size = u.dpToPx(sizeDp);
+        bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        bitmap.setHasAlpha(true);
+        canvas = new Canvas(bitmap);
+        paint = new Paint();
+        paint.setAntiAlias(true);
+        paint.setColor(getColorInt("primary"));
+        canvas.drawCircle(size / 2, size / 2, size / 2, paint);
+        
+        initial = "?";
+        if (u.isValidString(name)) {
+            for (int i = 0; i < name.length(); i++) {
+                c = name.charAt(i);
+                if (Character.isLetter(c)) {
+                    initial = String.valueOf(c).toUpperCase();
+                    break;
+                }
+            }
+        }
+        paint.setColor(getColorInt("on-primary"));
+        paint.setTextSize(u.dpToPx(sizeDp / 2));
+        paint.setTypeface(Typeface.DEFAULT_BOLD);
+        paint.setTextAlign(Paint.Align.CENTER);
+        bounds = new android.graphics.Rect();
+        paint.getTextBounds(initial, 0, initial.length(), bounds);
+        canvas.drawText(initial, size / 2, size / 2 + bounds.height() / 2, paint);
+        return bitmap;
+    }
+
+    loadImageAsync(image, avatarView, name, sizeDp) {
+        cancelImageLoad(avatarView);
+        initialBitmap = createInitialBitmap(name, sizeDp);
+        initialDrawable = new BitmapDrawable(context.getResources(), initialBitmap);
+        request = new ImageRequest.Builder(context)
+            .data(image)
+            .transformations(new CircleCropTransformation())
+            .target(avatarView)
+            .placeholder(initialDrawable) 
+            .error(initialDrawable)       
+            .allowHardware(false)
+            .build();
+        disposable = imageLoader.enqueue(request);
+        disposableMap.put(avatarView, disposable);
+    }
+
+    createCardBackground(bgColor, radiusDp) {
+        bg = new GradientDrawable();
+        bg.setColor(Color.parseColor(bgColor));
+        bg.setCornerRadius(u.dpToPx(radiusDp));
+        bg.setStroke(u.dpToPx(1), getColorInt("outline-variant"));
+        return bg;
+    }
+
+    getDrawable(activity, drawableName) {
+        resourceId = context.getResources().getIdentifier(drawableName, "drawable", context.getPackageName());
+        if (resourceId != 0) {
+            return context.getResources().getDrawable(resourceId);
+        }
+        return null;
+    }
+
+    setupLongPressHandler(view, final Runnable onLongPress) {
+        final boolean[] state = new boolean[]{false};
+        final Runnable wrapper = new Runnable() {
+            run() {
+                state[0] = true;
+                onLongPress.run();
+            }
+        };
+        view.setOnTouchListener(new View.OnTouchListener() {
+            onTouch(v, event) {
+                action = event.getAction();
+                if (action == MotionEvent.ACTION_DOWN) {
+                    state[0] = false;
+                    mainHandler.postDelayed(wrapper, LONG_PRESS_DELAY);
+                    return true;
+                } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                    mainHandler.removeCallbacks(wrapper);
+                    if (action == MotionEvent.ACTION_UP && !state[0]) {
+                        v.performClick();
+                    }
+                    return true;
+                }
+                return false;
+            }
+        });
+    }
+
+    showContactViaDialog(activity, number) {
+        e164Number = u.convertToE164(number);
+        contactsUri = android.net.Uri.parse("content://com.android.contacts/data");
+        apps = new java.util.ArrayList();
+
+        cursor1 = null;
+        try {
+            projection1 = new String[]{"contact_id"};
+            cursor1 = context.getContentResolver().query(contactsUri, projection1, "data4 = ?", new String[]{e164Number}, null);
+
+            while (cursor1 != null && cursor1.moveToNext()) {
+                contactId = cursor1.getString(0);
+                cursor = null;
+                try {
+                    projection = new String[]{"_id", "account_type", "mimetype", "data3"};
+                    cursor = context.getContentResolver().query(contactsUri, projection, "contact_id = ?", new String[]{contactId}, null);
+
+                    while (cursor != null && cursor.moveToNext()) {
+                        dataId = cursor.getString(0);
+                        accountType = cursor.getString(1);
+                        mimetype = cursor.getString(2);
+                        label = cursor.getString(3);
+
+                        intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+                        intent.setDataAndType(android.net.Uri.parse("content://com.android.contacts/data/" + dataId), mimetype);
+                        intent.setPackage(accountType);
+                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+
+                        pm = context.getPackageManager();
+                        resolveInfos = pm.queryIntentActivities(intent, 131072);
+                        if (resolveInfos == null || resolveInfos.size() == 0) continue;
+
+                        try {
+                            appInfo = pm.getApplicationInfo(accountType, 0);
+                            appName = pm.getApplicationLabel(appInfo).toString();
+                            appIcon = pm.getApplicationIcon(accountType);
+
+                            appData = new Object[3];
+                            appData[0] = appIcon;
+                            appData[1] = (label != null ? label : appName);
+                            appData[2] = intent;
+                            apps.add(appData);
+                        } catch (Exception e) {}
+                    }
+                } finally {
+                    u.closeQuietly(cursor);
+                }
+            }
+        } catch (Exception e) {
+            u.logToFile("Error querying contact apps: " + e.getMessage());
+        } finally {
+            u.closeQuietly(cursor1);
+        }
+
+        if (apps.isEmpty()) {
+            tasker.showToast("No apps found for this contact");
+            return;
+        }
+
+        dialog = new android.app.Dialog(activity);
+        dialog.requestWindowFeature(1);
+        dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+
+        mainLayout = new LinearLayout(activity);
+        mainLayout.setOrientation(LinearLayout.VERTICAL);
+        mainBg = createCardBackground(getThemeColor("surface"), 16);
+        mainLayout.setBackground(mainBg);
+        mainLayout.setPadding(u.dpToPx(20), u.dpToPx(20), u.dpToPx(20), u.dpToPx(20));
+
+        titleText = new TextView(activity);
+        titleText.setText("Contact Via");
+        titleText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+        titleText.setTypeface(null, Typeface.BOLD);
+        titleText.setTextColor(getColorInt("on-surface"));
+        titleText.setGravity(Gravity.CENTER);
+        titleParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        titleParams.bottomMargin = u.dpToPx(20);
+        titleText.setLayoutParams(titleParams);
+        mainLayout.addView(titleText);
+
+        scrollView = new android.widget.ScrollView(activity);
+        scrollView.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
+
+        appsContainer = new LinearLayout(activity);
+        appsContainer.setOrientation(LinearLayout.VERTICAL);
+
+        for (int i = 0; i < apps.size(); i++) {
+            appData = (Object[]) apps.get(i);
+            appIcon = (android.graphics.drawable.Drawable) appData[0];
+            appLabel = (String) appData[1];
+            appIntent = (android.content.Intent) appData[2];
+
+            appCard = new LinearLayout(activity);
+            appCard.setOrientation(LinearLayout.HORIZONTAL);
+            appCard.setPadding(u.dpToPx(16), u.dpToPx(16), u.dpToPx(16), u.dpToPx(16));
+            appCard.setGravity(Gravity.CENTER_VERTICAL);
+            appCardParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            appCardParams.bottomMargin = u.dpToPx(12);
+            appCard.setLayoutParams(appCardParams);
+            appCardBg = createCardBackground(getThemeColor("surface-variant"), 12);
+            appCard.setBackground(appCardBg);
+
+            iconView = new ImageView(activity);
+            iconSize = u.dpToPx(40);
+            iconParams = new LinearLayout.LayoutParams(iconSize, iconSize);
+            iconParams.rightMargin = u.dpToPx(16);
+            iconView.setLayoutParams(iconParams);
+            iconView.setImageDrawable(appIcon);
+            appCard.addView(iconView);
+
+            labelText = new TextView(activity);
+            labelText.setText(appLabel);
+            labelText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+            labelText.setTextColor(getColorInt("on-surface"));
+            labelText.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+            appCard.addView(labelText);
+
+            finalIntent = appIntent;
+            appCard.setOnClickListener(new View.OnClickListener() {
+                onClick(View v) {
+                    try {
+                        context.startActivity(finalIntent);
+                        dialog.dismiss();
+                    } catch (Exception e) {
+                        tasker.showToast("Cannot open app");
+                    }
+                }
+            });
+
+            appsContainer.addView(appCard);
+        }
+
+        scrollView.addView(appsContainer);
+        mainLayout.addView(scrollView);
+
+        cancelButton = new TextView(activity);
+        cancelButton.setText("CANCEL");
+        cancelButton.setTextColor(getColorInt("primary"));
+        cancelButton.setTypeface(null, Typeface.BOLD);
+        cancelButton.setPadding(u.dpToPx(12), u.dpToPx(8), u.dpToPx(12), u.dpToPx(8));
+        
+        buttonContainer = new LinearLayout(activity);
+        buttonContainer.setOrientation(LinearLayout.HORIZONTAL);
+        buttonContainer.setGravity(Gravity.END);
+        buttonContainerParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        buttonContainerParams.topMargin = u.dpToPx(8);
+        buttonContainer.setLayoutParams(buttonContainerParams);
+        buttonContainer.addView(cancelButton);
+        
+        cancelButton.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                dialog.dismiss();
+            }
+        });
+        mainLayout.addView(buttonContainer);
+
+        dialog.setContentView(mainLayout);
+        windowParams = dialog.getWindow().getAttributes();
+        displayMetrics = activity.getResources().getDisplayMetrics();
+        windowParams.width = Math.round(displayMetrics.widthPixels * 0.9f);
+        dialog.getWindow().setAttributes(windowParams);
+        dialog.show();
+    }
+
+    setClip(str) {
+        clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE);
+        clip = ClipData.newPlainText("phone", str);
+        clipboard.setPrimaryClip(clip);
+        tasker.showToast("Copied: " + str);
+    }
+
+    showConfirmDialog(activity, title, message, positiveText, onConfirm) {
+        dialog = new android.app.Dialog(activity);
+        dialog.requestWindowFeature(1);
+        dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+
+        dialogLayout = new LinearLayout(activity);
+        dialogLayout.setOrientation(LinearLayout.VERTICAL);
+        dialogLayout.setPadding(u.dpToPx(24), u.dpToPx(24), u.dpToPx(24), u.dpToPx(16));
+        
+        dialogBg = createCardBackground(getThemeColor("surface"), 16);
+        dialogLayout.setBackground(dialogBg);
+
+        titleText = new TextView(activity);
+        titleText.setText(title);
+        titleText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+        titleText.setTypeface(null, Typeface.BOLD);
+        titleText.setTextColor(getColorInt("on-surface"));
+        dialogLayout.addView(titleText);
+
+        if (message != null && !message.isEmpty()) {
+            messageText = new TextView(activity);
+            messageText.setText(message);
+            messageText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+            messageText.setTextColor(getColorInt("on-surface-variant"));
+            
+            messageParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            );
+            messageParams.topMargin = u.dpToPx(8);
+            messageParams.bottomMargin = u.dpToPx(24);
+            messageText.setLayoutParams(messageParams);
+            dialogLayout.addView(messageText);
+        } else {
+            titleParams = titleText.getLayoutParams();
+            if (titleParams == null) {
+                titleParams = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+                titleText.setLayoutParams(titleParams);
+            }
+            titleParams.bottomMargin = u.dpToPx(24);
+        }
+
+        buttonContainer = new LinearLayout(activity);
+        buttonContainer.setOrientation(LinearLayout.HORIZONTAL);
+        buttonContainer.setGravity(Gravity.END);
+        
+        cancelBtn = new TextView(activity);
+        cancelBtn.setText("CANCEL");
+        cancelBtn.setTextColor(getColorInt("primary"));
+        cancelBtn.setTypeface(null, Typeface.BOLD);
+        cancelBtn.setPadding(u.dpToPx(12), u.dpToPx(8), u.dpToPx(12), u.dpToPx(8));
+        cancelBtn.setOnClickListener(new View.OnClickListener() {
+            onClick(v) {
+                dialog.dismiss();
+            }
+        });
+        buttonContainer.addView(cancelBtn);
+
+        confirmBtn = new TextView(activity);
+        confirmBtn.setText(positiveText != null ? positiveText : "OK");
+        confirmBtn.setTextColor(getColorInt("error"));
+        confirmBtn.setTypeface(null, Typeface.BOLD);
+        confirmBtn.setPadding(u.dpToPx(12), u.dpToPx(8), u.dpToPx(12), u.dpToPx(8));
+        
+        confirmBtn.setOnClickListener(new View.OnClickListener() {
+            onClick(v) {
+                dialog.dismiss();
+                if (onConfirm != null) {
+                    onConfirm.run();
+                }
+            }
+        });
+        buttonContainer.addView(confirmBtn);
+        dialogLayout.addView(buttonContainer);
+        dialog.setContentView(dialogLayout);
+        
+        windowParams = dialog.getWindow().getAttributes();
+        displayMetrics = activity.getResources().getDisplayMetrics();
+        windowParams.width = Math.round(displayMetrics.widthPixels * 0.9f);
+        dialog.getWindow().setAttributes(windowParams);
+        dialog.show();
+    }
+
+    createIconButton(ctx, drawableName, colorHex) {
+        btn = new android.widget.Button(ctx);
+        btn.setBackground(null);
+        btn.setPadding(u.dpToPx(8), u.dpToPx(8), u.dpToPx(8), u.dpToPx(8));
+        btn.setMinimumWidth(0);
+        btn.setMinWidth(0);
+        icon = getDrawable(ctx, drawableName);
+        if (icon != null) {
+            icon.setTint(Color.parseColor(colorHex));
+            btn.setCompoundDrawablesWithIntrinsicBounds(icon, null, null, null);
+        }
+        return btn;
+    }
+
+    createToggleSwitch(ctx, checked) {
+        checkBox = new android.widget.CheckBox(ctx);
+        checkBox.setChecked(checked);
+        checkBox.setButtonDrawable(null);
+        iconName = checked ? "mw_toggle_check_box" : "mw_toggle_check_box_outline_blank";
+        icon = getDrawable(ctx, iconName);
+        if (icon != null) {
+            icon.setTint(Color.parseColor(getThemeColor("primary")));
+            checkBox.setCompoundDrawablesWithIntrinsicBounds(icon, null, null, null);
+        }
+        checkBox.setText("");
+        checkBox.setPadding(0, 0, 0, 0);
+        checkBoxParams = new LinearLayout.LayoutParams(u.dpToPx(24), u.dpToPx(24));
+        checkBox.setLayoutParams(checkBoxParams);
+        return checkBox;
+    }
+
+    createStyledInput(ctx, hint) {
+        input = new android.widget.EditText(ctx);
+        input.setHint(hint);
+        input.setSingleLine(true);
+        input.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        input.setTextColor(getColorInt("on-surface"));
+        input.setHintTextColor(getColorInt("on-surface-variant"));
+        inputBg = new GradientDrawable();
+        inputBg.setColor(getColorInt("surface"));
+        inputBg.setCornerRadius(u.dpToPx(16));
+        inputBg.setStroke(u.dpToPx(1), getColorInt("outline-variant"));
+        input.setBackground(inputBg);
+        input.setPadding(u.dpToPx(12), u.dpToPx(12), u.dpToPx(12), u.dpToPx(12));
+        return input;
+    }
+
+    getMatchType(pattern) {
+        if (pattern.startsWith("*") && pattern.endsWith("*")) return "contains";
+        if (pattern.startsWith("*")) return "ends with";
+        if (pattern.endsWith("*")) return "starts with";
+        return "matches";
+    }
+
+    createFilterCard(activity, rootLayout, dialog, state, type, field, value, enabled, note, refreshRunnable) {
+        card = new LinearLayout(activity);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setPadding(u.dpToPx(12), u.dpToPx(12), u.dpToPx(12), u.dpToPx(12));
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        cardParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        cardParams.bottomMargin = u.dpToPx(8);
+        card.setLayoutParams(cardParams);
+        
+        cardBg = new GradientDrawable();
+        cardBg.setColor(getColorInt("surface"));
+        cardBg.setCornerRadius(u.dpToPx(16));
+        cardBg.setStroke(u.dpToPx(1), getColorInt("outline-variant"));
+        card.setBackground(cardBg);
+        
+        toggle = createToggleSwitch(activity, enabled);
+        toggleParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        toggleParams.rightMargin = u.dpToPx(8);
+        toggle.setLayoutParams(toggleParams);
+        finalValue = value;
+        toggle.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                checkBox = (android.widget.CheckBox) v;
+                newState = checkBox.isChecked();
+                iconName = newState ? "mw_toggle_check_box" : "mw_toggle_check_box_outline_blank";
+                icon = getDrawable(activity, iconName);
+                if (icon != null) {
+                    icon.setTint(getColorInt("primary"));
+                    checkBox.setCompoundDrawablesWithIntrinsicBounds(icon, null, null, null);
+                }
+                d.toggleFilter(finalValue, newState);
+                tasker.showToast("Filter " + (newState ? "enabled" : "disabled"));
+            }
+        });
+        card.addView(toggle);
+        
+        metaLayout = new LinearLayout(activity);
+        metaLayout.setOrientation(LinearLayout.VERTICAL);
+        metaLayout.setGravity(Gravity.CENTER);
+        metaParams = new LinearLayout.LayoutParams(u.dpToPx(80), LinearLayout.LayoutParams.WRAP_CONTENT);
+        metaParams.rightMargin = u.dpToPx(8);
+        metaLayout.setLayoutParams(metaParams);
+        
+        typePill = new TextView(activity);
+        typePill.setText(type);
+        typePill.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        typePill.setTypeface(null, Typeface.BOLD);
+        typePill.setPadding(u.dpToPx(8), u.dpToPx(4), u.dpToPx(8), u.dpToPx(4));
+        typePill.setGravity(Gravity.CENTER);
+        typePill.setMaxLines(1);
+        typePill.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        pillBg = new GradientDrawable();
+        pillBg.setCornerRadius(u.dpToPx(12));
+        if (type.equals("Block")) {
+            pillBg.setColor(Color.parseColor("#FFEBEE"));
+            typePill.setTextColor(Color.parseColor("#C62828"));
+        } else {
+            pillBg.setColor(Color.parseColor("#E8F5E9"));
+            typePill.setTextColor(Color.parseColor("#2E7D32"));
+        }
+        typePill.setBackground(pillBg);
+        typePillParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        typePill.setLayoutParams(typePillParams);
+        metaLayout.addView(typePill);
+        
+        fieldText = new TextView(activity);
+        fieldText.setText(field);
+        fieldText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        fieldText.setTextColor(getColorInt("on-surface"));
+        fieldText.setGravity(Gravity.CENTER);
+        fieldParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        fieldParams.topMargin = u.dpToPx(4);
+        fieldText.setLayoutParams(fieldParams);
+        metaLayout.addView(fieldText);
+        
+        matchType = getMatchType(value);
+        matchText = new TextView(activity);
+        matchText.setText(matchType);
+        matchText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        matchText.setTextColor(getColorInt("on-surface"));
+        matchText.setGravity(Gravity.CENTER);
+        matchParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        matchParams.topMargin = u.dpToPx(4);
+        matchText.setLayoutParams(matchParams);
+        metaLayout.addView(matchText);
+        card.addView(metaLayout);
+        
+        valueLayout = new LinearLayout(activity);
+        valueLayout.setOrientation(LinearLayout.VERTICAL);
+        valueLayout.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+        valueLayout.setGravity(Gravity.CENTER_HORIZONTAL);
+        
+        cleanValue = value.replace("*", "");
+        valueText = new TextView(activity);
+        valueText.setText(cleanValue);
+        valueText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        valueText.setTypeface(null, Typeface.BOLD);
+        valueText.setTextColor(getColorInt("on-surface"));
+        valueText.setGravity(Gravity.CENTER);
+        valueLayout.addView(valueText);
+        
+        if (note != null && !note.isEmpty()) {
+            noteText = new TextView(activity);
+            noteText.setText(note);
+            noteText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            noteText.setTextColor(getColorInt("on-surface-variant"));
+            noteText.setGravity(Gravity.CENTER);
+            noteParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            noteParams.topMargin = u.dpToPx(4);
+            noteText.setLayoutParams(noteParams);
+            valueLayout.addView(noteText);
+        }
+        card.addView(valueLayout);
+        
+        actionsLayout = new LinearLayout(activity);
+        actionsLayout.setOrientation(LinearLayout.VERTICAL);
+        actionsLayout.setGravity(Gravity.CENTER);
+        
+        editButton = createIconButton(activity, "mw_editor_mode_edit", getThemeColor("primary"));
+        finalType = type;
+        finalField = field;
+        finalValue2 = value;
+        finalNote = note;
+        editButton.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                renderUserFiltersEdit(activity, rootLayout, dialog, state, finalType, finalField, finalValue2, finalNote, finalValue2);
+            }
+        });
+        actionsLayout.addView(editButton);
+        
+        deleteButton = createIconButton(activity, "mw_action_delete_forever", "#C62828");
+        finalValueForDelete = value;
+        finalCleanValue = cleanValue;
+        
+        deleteButton.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                confirmAction = new Runnable() {
+                    run() {
+                        d.deleteFilter(finalValueForDelete);
+                        tasker.showToast("Filter deleted");
+                        refreshRunnable.run();
+                    }
+                };
+                showConfirmDialog(activity, "Delete Filter", "Are you sure you want to delete the filter for: " + finalCleanValue + "?", "DELETE", confirmAction);
+            }
+        });
+        actionsLayout.addView(deleteButton);
+        card.addView(actionsLayout);
+        return card;
+    }
+
+    showPickDialog(activity, rootLayout, dialog, state) {
+        contacts = d.loadFilterContacts();
+        if (contacts.isEmpty()) {
+            tasker.showToast("No contacts in database");
+            return;
+        }
+        
+        contactNames = new java.util.ArrayList();
+        for (int i = 0; i < contacts.size(); i++) {
+            contact = (Object[]) contacts.get(i);
+            contactNames.add(contact[0] + "\n" + contact[1]);
+        }
+        
+        items = (String[]) contactNames.toArray(new String[0]);
+        builder = new android.app.AlertDialog.Builder(activity);
+        builder.setTitle("Select number to filter");
+        builder.setItems(items, new android.content.DialogInterface.OnClickListener() {
+            onClick(android.content.DialogInterface dlg, int which) {
+                selectedContact = (Object[]) contacts.get(which);
+                selectedName = (String) selectedContact[0];
+                selectedNumber = (String) selectedContact[1];
+                selectedJson = (String) selectedContact[2];
+                cleanName = selectedName.replace(" ✅", "").replace(" 🔴", "");
+                
+                detailsForFilter = new Object[6];
+                detailsForFilter[0] = cleanName;
+                detailsForFilter[1] = selectedJson;
+                detailsForFilter[2] = new Integer(0);
+                detailsForFilter[3] = Boolean.FALSE;
+                detailsForFilter[4] = null;
+                detailsForFilter[5] = null;
+                
+                state.put("filterNumber", selectedNumber);
+                state.put("filterName", cleanName);
+                state.put("details", detailsForFilter);
+                
+                renderUserFiltersEdit(activity, rootLayout, dialog, state, "Block", null, null, null, null);
+            }
+        });
+        builder.setNegativeButton("Cancel", null);
+        builder.create().show();
+    }
+
+    renderUserFiltersEdit(activity, rootLayout, dialog, state, type, field, value, note, oldValue) {
+        rootLayout.removeAllViews();
+        state.put("currentView", "edit");
+        
+        headerLayout = new LinearLayout(activity);
+        headerLayout.setOrientation(LinearLayout.HORIZONTAL);
+        headerLayout.setBackgroundColor(getColorInt("primary"));
+        headerLayout.setPadding(u.dpToPx(4), u.dpToPx(4), u.dpToPx(4), u.dpToPx(4));
+        headerLayout.setGravity(Gravity.CENTER_VERTICAL);
+        
+        backButton = createIconButton(activity, "mw_navigation_arrow_back", getThemeColor("on-primary"));
+        backButtonParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        backButtonParams.rightMargin = u.dpToPx(8);
+        backButton.setLayoutParams(backButtonParams);
+        backButton.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                renderUserFiltersList(activity, rootLayout, dialog, state);
+            }
+        });
+        headerLayout.addView(backButton);
+        
+        titleText = new TextView(activity);
+        titleText.setText((oldValue == null ? "Add " : "Edit ") + type + " Filter");
+        titleText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+        titleText.setTypeface(null, Typeface.BOLD);
+        titleText.setTextColor(getColorInt("on-primary"));
+        titleText.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+        headerLayout.addView(titleText);
+        rootLayout.addView(headerLayout);
+        
+        formScroll = new android.widget.ScrollView(activity);
+        formScroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
+        
+        formLayout = new LinearLayout(activity);
+        formLayout.setOrientation(LinearLayout.VERTICAL);
+        formLayout.setPadding(u.dpToPx(20), u.dpToPx(20), u.dpToPx(20), u.dpToPx(20));
+        
+        typeLabel = new TextView(activity);
+        typeLabel.setText("Filter Type:");
+        typeLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        typeLabel.setTypeface(null, Typeface.BOLD);
+        typeLabel.setTextColor(getColorInt("on-background"));
+        formLayout.addView(typeLabel);
+        
+        types = new java.util.ArrayList();
+        types.add("Block");
+        types.add("Allow");
+        
+        typeDisplay = new TextView(activity);
+        typeDisplay.setText(type != null ? type : "Block");
+        typeDisplay.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        typeDisplay.setTextColor(getColorInt("on-surface"));
+        typeDisplay.setPadding(u.dpToPx(12), u.dpToPx(12), u.dpToPx(12), u.dpToPx(12));
+        displayBg = new GradientDrawable();
+        displayBg.setColor(getColorInt("surface"));
+        displayBg.setCornerRadius(u.dpToPx(16));
+        displayBg.setStroke(u.dpToPx(1), getColorInt("outline-variant"));
+        typeDisplay.setBackground(displayBg);
+        dropdownIcon = getDrawable(activity, "mw_navigation_arrow_drop_down");
+        if (dropdownIcon != null) {
+            dropdownIcon.setTint(getColorInt("on-surface"));
+            typeDisplay.setCompoundDrawablesWithIntrinsicBounds(null, null, dropdownIcon, null);
+            typeDisplay.setCompoundDrawablePadding(u.dpToPx(8));
+        }
+        typeDisplay.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                builder = new android.app.AlertDialog.Builder(activity);
+                views = new TextView[types.size()];
+                container = new LinearLayout(activity);
+                container.setOrientation(LinearLayout.VERTICAL);
+                container.setBackgroundColor(getColorInt("surface"));
+                dialogRef = new Object[1];
+                for (int i = 0; i < types.size(); i++) {
+                    tv = new TextView(activity);
+                    tv.setText((String) types.get(i));
+                    tv.setPadding(u.dpToPx(16), u.dpToPx(16), u.dpToPx(16), u.dpToPx(16));
+                    tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+                    tv.setTextColor(getColorInt("on-surface"));
+                    tv.setBackgroundColor(getColorInt("surface"));
+                    views[i] = tv;
+                    container.addView(tv);
+                    capturedText = (String) types.get(i);
+                    tv.setOnClickListener(new View.OnClickListener() {
+                        onClick(View v2) {
+                            typeDisplay.setText(capturedText);
+                            ((android.app.AlertDialog)dialogRef[0]).dismiss();
+                        }
+                    });
+                }
+                builder.setView(container);
+                dAlert = builder.create();
+                dialogRef[0] = dAlert;
+                dAlert.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(getColorInt("surface")));
+                dAlert.show();
+            }
+        });
+        typeSpinnerParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        typeSpinnerParams.topMargin = u.dpToPx(8);
+        typeSpinnerParams.bottomMargin = u.dpToPx(16);
+        typeDisplay.setLayoutParams(typeSpinnerParams);
+        formLayout.addView(typeDisplay);
+
+        fieldLabel = new TextView(activity);
+        fieldLabel.setText("Filter by:");
+        fieldLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        fieldLabel.setTypeface(null, Typeface.BOLD);
+        fieldLabel.setTextColor(getColorInt("on-background"));
+        formLayout.addView(fieldLabel);
+
+        fields = new java.util.ArrayList();
+        fields.add("number");
+        fields.add("name");
+        
+        parsedDetails = (Object[]) state.get("details");
+        if (parsedDetails != null && parsedDetails[1] != null && !((String)parsedDetails[1]).equals("<null>")) {
+            try {
+                json = new org.json.JSONObject((String)parsedDetails[1]);
+                dataArray = json.getJSONArray("data");
+                if (dataArray.length() > 0) {
+                    dataObj = dataArray.getJSONObject(0);
+                    if (dataObj.has("countryCode")) fields.add("country code");
+                    if (dataObj.has("dialingCode")) fields.add("dialing code");
+                    if (dataObj.has("phones")) {
+                        phones = dataObj.getJSONArray("phones");
+                        if (phones.length() > 0 && phones.getJSONObject(0).has("carrier")) {
+                            fields.add("carrier");
+                        }
+                    }
+                }
+            } catch (Exception e) {}
+        }
+        
+        fieldDisplay = new TextView(activity);
+        fieldDisplay.setText(field != null ? field : "number");
+        fieldDisplay.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        fieldDisplay.setTextColor(getColorInt("on-surface"));
+        fieldDisplay.setPadding(u.dpToPx(12), u.dpToPx(12), u.dpToPx(12), u.dpToPx(12));
+        fieldDisplay.setBackground(displayBg);
+        if (dropdownIcon != null) {
+            fieldDisplay.setCompoundDrawablesWithIntrinsicBounds(null, null, dropdownIcon, null);
+            fieldDisplay.setCompoundDrawablePadding(u.dpToPx(8));
+        }
+
+        valueInput = createStyledInput(activity, "Enter value");
+
+        fieldDisplay.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                builder = new android.app.AlertDialog.Builder(activity);
+                views = new TextView[fields.size()];
+                container = new LinearLayout(activity);
+                container.setOrientation(LinearLayout.VERTICAL);
+                container.setBackgroundColor(getColorInt("surface"));
+                dialogRef = new Object[1];
+                for (int i = 0; i < fields.size(); i++) {
+                    tv = new TextView(activity);
+                    tv.setText((String) fields.get(i));
+                    tv.setPadding(u.dpToPx(16), u.dpToPx(16), u.dpToPx(16), u.dpToPx(16));
+                    tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+                    tv.setTextColor(getColorInt("on-surface"));
+                    tv.setBackgroundColor(getColorInt("surface"));
+                    views[i] = tv;
+                    container.addView(tv);
+                    capturedText = (String) fields.get(i);
+                    tv.setOnClickListener(new View.OnClickListener() {
+                        onClick(View v2) {
+                            fieldDisplay.setText(capturedText);
+                            filterNumber = (String) state.get("filterNumber");
+                            filterName = (String) state.get("filterName");
+                            parsedDetails = (Object[]) state.get("details");
+                            
+                            if (capturedText.equals("number") && filterNumber != null && !filterNumber.isEmpty()) {
+                                valueInput.setText(filterNumber);
+                            } else if (capturedText.equals("name") && filterName != null && !filterName.isEmpty()) {
+                                valueInput.setText(filterName);
+                            } else if (parsedDetails != null) {
+                                try {
+                                    json = new org.json.JSONObject((String)parsedDetails[1]);
+                                    dataArray = json.getJSONArray("data");
+                                    if (dataArray.length() > 0) {
+                                        dataObj = dataArray.getJSONObject(0);
+                                        if (capturedText.equals("country code") && dataObj.has("countryCode")) {
+                                            valueInput.setText(dataObj.getString("countryCode"));
+                                        } else if (capturedText.equals("dialing code") && dataObj.has("dialingCode")) {
+                                            valueInput.setText(dataObj.getString("dialingCode"));
+                                        } else if (capturedText.equals("carrier") && dataObj.has("phones")) {
+                                            phones = dataObj.getJSONArray("phones");
+                                            if (phones.length() > 0 && phones.getJSONObject(0).has("carrier")) {
+                                                valueInput.setText(phones.getJSONObject(0).getString("carrier"));
+                                            }
+                                        }
+                                    }
+                                } catch (Exception e) {}
+                            }
+                            ((android.app.AlertDialog)dialogRef[0]).dismiss();
+                        }
+                    });
+                }
+                builder.setView(container);
+                dAlert = builder.create();
+                dialogRef[0] = dAlert;
+                dAlert.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(getColorInt("surface")));
+                dAlert.show();
+            }
+        });
+        fieldSpinnerParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        fieldSpinnerParams.topMargin = u.dpToPx(8);
+        fieldSpinnerParams.bottomMargin = u.dpToPx(16);
+        fieldDisplay.setLayoutParams(fieldSpinnerParams);
+        formLayout.addView(fieldDisplay);
+
+        matchLabel = new TextView(activity);
+        matchLabel.setText("Match type:");
+        matchLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        matchLabel.setTypeface(null, Typeface.BOLD);
+        matchLabel.setTextColor(getColorInt("on-background"));
+        formLayout.addView(matchLabel);
+        
+        matches = new java.util.ArrayList();
+        matches.add("matches");
+        matches.add("contains");
+        matches.add("starts with");
+        matches.add("ends with");
+        
+        matchDisplay = new TextView(activity);
+        matchDisplay.setText(value != null ? getMatchType(value) : "matches");
+        matchDisplay.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        matchDisplay.setTextColor(getColorInt("on-surface"));
+        matchDisplay.setPadding(u.dpToPx(12), u.dpToPx(12), u.dpToPx(12), u.dpToPx(12));
+        matchDisplay.setBackground(displayBg);
+        if (dropdownIcon != null) {
+            matchDisplay.setCompoundDrawablesWithIntrinsicBounds(null, null, dropdownIcon, null);
+            matchDisplay.setCompoundDrawablePadding(u.dpToPx(8));
+        }
+        matchDisplay.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                builder = new android.app.AlertDialog.Builder(activity);
+                views = new TextView[matches.size()];
+                container = new LinearLayout(activity);
+                container.setOrientation(LinearLayout.VERTICAL);
+                container.setBackgroundColor(getColorInt("surface"));
+                dialogRef = new Object[1];
+                for (int i = 0; i < matches.size(); i++) {
+                    tv = new TextView(activity);
+                    tv.setText((String) matches.get(i));
+                    tv.setPadding(u.dpToPx(16), u.dpToPx(16), u.dpToPx(16), u.dpToPx(16));
+                    tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+                    tv.setTextColor(getColorInt("on-surface"));
+                    tv.setBackgroundColor(getColorInt("surface"));
+                    views[i] = tv;
+                    container.addView(tv);
+                    capturedText = (String) matches.get(i);
+                    tv.setOnClickListener(new View.OnClickListener() {
+                        onClick(View v2) {
+                            matchDisplay.setText(capturedText);
+                            ((android.app.AlertDialog)dialogRef[0]).dismiss();
+                        }
+                    });
+                }
+                builder.setView(container);
+                dAlert = builder.create();
+                dialogRef[0] = dAlert;
+                dAlert.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(getColorInt("surface")));
+                dAlert.show();
+            }
+        });
+        matchSpinnerParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        matchSpinnerParams.topMargin = u.dpToPx(8);
+        matchSpinnerParams.bottomMargin = u.dpToPx(16);
+        matchDisplay.setLayoutParams(matchSpinnerParams);
+        formLayout.addView(matchDisplay);
+
+        valueLabel = new TextView(activity);
+        valueLabel.setText("Value:");
+        valueLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        valueLabel.setTypeface(null, Typeface.BOLD);
+        valueLabel.setTextColor(getColorInt("on-background"));
+        formLayout.addView(valueLabel);
+        
+        filterNumber = (String) state.get("filterNumber");
+        if (value != null) {
+            cleanValue = value.replace("*", "");
+            valueInput.setText(cleanValue);
+        } else if (filterNumber != null && !filterNumber.isEmpty()) {
+            valueInput.setText(filterNumber);
+        }
+        valueInputParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        valueInputParams.topMargin = u.dpToPx(8);
+        valueInputParams.bottomMargin = u.dpToPx(16);
+        valueInput.setLayoutParams(valueInputParams);
+        formLayout.addView(valueInput);
+
+        noteLabel = new TextView(activity);
+        noteLabel.setText("Note (optional):");
+        noteLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        noteLabel.setTypeface(null, Typeface.BOLD);
+        noteLabel.setTextColor(getColorInt("on-background"));
+        formLayout.addView(noteLabel);
+        
+        noteInput = createStyledInput(activity, "Add note...");
+        filterName = (String) state.get("filterName");
+        if (note != null && !note.isEmpty()) {
+            noteInput.setText(note);
+        } else if (filterName != null && !filterName.isEmpty()) {
+            noteInput.setText(filterName);
+        }
+        noteInputParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        noteInputParams.topMargin = u.dpToPx(8);
+        noteInput.setLayoutParams(noteInputParams);
+        formLayout.addView(noteInput);
+        
+        formScroll.addView(formLayout);
+        rootLayout.addView(formScroll);
+
+        buttonLayout = new LinearLayout(activity);
+        buttonLayout.setOrientation(LinearLayout.HORIZONTAL);
+        buttonLayout.setGravity(Gravity.CENTER);
+        buttonLayout.setPadding(u.dpToPx(16), u.dpToPx(8), u.dpToPx(16), u.dpToPx(16));
+        
+        cancelButton = createStyledButton(activity, "Cancel", "mw_navigation_cancel", "surface-variant", "on-surface-variant");
+        cancelButtonParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        cancelButtonParams.rightMargin = u.dpToPx(12);
+        cancelButton.setLayoutParams(cancelButtonParams);
+        cancelButton.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                renderUserFiltersList(activity, rootLayout, dialog, state);
+            }
+        });
+        buttonLayout.addView(cancelButton);
+        
+        saveButton = createStyledButton(activity, oldValue == null ? "Save" : "Update", "mw_content_save", "primary", "on-primary");
+        saveButton.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+        finalOldValue = oldValue;
+        saveButton.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                selectedType = typeDisplay.getText().toString();
+                selectedField = fieldDisplay.getText().toString();
+                selectedMatch = matchDisplay.getText().toString();
+                enteredValue = valueInput.getText().toString().trim();
+                enteredNote = noteInput.getText().toString().trim();
+                
+                if (enteredValue.isEmpty()) {
+                    tasker.showToast("Value cannot be empty");
+                    return;
+                }
+                
+                formattedValue = enteredValue;
+                if (selectedMatch.equals("contains")) formattedValue = "*" + enteredValue + "*";
+                else if (selectedMatch.equals("starts with")) formattedValue = enteredValue + "*";
+                else if (selectedMatch.equals("ends with")) formattedValue = "*" + enteredValue;
+                
+                if (selectedField.equals("number") && !enteredValue.contains("*")) {
+                    formattedValue = u.convertToE164(enteredValue);
+                }
+                
+                if (finalOldValue != null) d.deleteFilter(finalOldValue);
+                
+                d.saveFilter(selectedType, selectedField, formattedValue, enteredNote);
+                tasker.showToast("Filter " + (finalOldValue == null ? "added" : "updated"));
+                renderUserFiltersList(activity, rootLayout, dialog, state);
+            }
+        });
+        buttonLayout.addView(saveButton);
+        rootLayout.addView(buttonLayout);
+    }
+
+    renderUserFiltersList(activity, rootLayout, dialog, state) {
+        rootLayout.removeAllViews();
+        state.put("currentView", "list");
+
+        headerLayout = new LinearLayout(activity);
+        headerLayout.setOrientation(LinearLayout.HORIZONTAL);
+        headerLayout.setBackgroundColor(getColorInt("primary"));
+        headerLayout.setPadding(u.dpToPx(4), u.dpToPx(4), u.dpToPx(4), u.dpToPx(4));
+        headerLayout.setGravity(Gravity.CENTER_VERTICAL);
+        
+        backButton = createIconButton(activity, "mw_navigation_arrow_back", getThemeColor("on-primary"));
+        backButtonParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        backButtonParams.rightMargin = u.dpToPx(8);
+        backButton.setLayoutParams(backButtonParams);
+        backButton.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                dialog.dismiss();
+            }
+        });
+        headerLayout.addView(backButton);
+        
+        titleText = new TextView(activity);
+        titleText.setText("User Filters");
+        titleText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+        titleText.setTypeface(null, Typeface.BOLD);
+        titleText.setTextColor(getColorInt("on-primary"));
+        titleText.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+        headerLayout.addView(titleText);
+        rootLayout.addView(headerLayout);
+
+        searchInput = createStyledInput(activity, "Search User Filters...");
+        searchInputParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        searchInputParams.setMargins(u.dpToPx(16), u.dpToPx(16), u.dpToPx(16), u.dpToPx(12));
+        searchInput.setLayoutParams(searchInputParams);
+        rootLayout.addView(searchInput);
+
+        filtersListContainer = new LinearLayout(activity);
+        filtersListContainer.setOrientation(LinearLayout.VERTICAL);
+        listBg = new GradientDrawable();
+        listBg.setColor(getColorInt("surface"));
+        listBg.setCornerRadius(u.dpToPx(16));
+        listBg.setStroke(u.dpToPx(1), getColorInt("outline"));
+        filtersListContainer.setBackground(listBg);
+        containerParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f);
+        containerParams.setMargins(u.dpToPx(16), 0, u.dpToPx(16), u.dpToPx(12));
+        filtersListContainer.setLayoutParams(containerParams);
+        filtersListContainer.setPadding(u.dpToPx(8), u.dpToPx(8), u.dpToPx(8), u.dpToPx(8));
+        
+        filtersScroll = new android.widget.ScrollView(activity);
+        filtersScroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
+        
+        filtersContainer = new LinearLayout(activity);
+        filtersContainer.setOrientation(LinearLayout.VERTICAL);
+        
+        refreshFiltersList = new Runnable() {
+            run() {
+                searchQuery = searchInput.getText().toString().toLowerCase().trim();
+                filtersContainer.removeAllViews();
+                filtersList = d.loadFilters();
+
+                if (filtersList.isEmpty()) {
+                    emptyText = new TextView(activity);
+                    emptyText.setText("No filters found. Click \"+\" to add a new filter.");
+                    emptyText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+                    emptyText.setTextColor(getColorInt("on-surface-variant"));
+                    emptyText.setGravity(Gravity.CENTER);
+                    emptyText.setPadding(u.dpToPx(20), u.dpToPx(32), u.dpToPx(20), u.dpToPx(32));
+                    emptyTextParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    emptyText.setLayoutParams(emptyTextParams);
+                    filtersContainer.addView(emptyText);
+                    return;
+                }
+
+                matchCount = 0;
+                for (int i = 0; i < filtersList.size(); i++) {
+                    filter = (Object[]) filtersList.get(i);
+                    filterType = (String) filter[0];
+                    filterField = (String) filter[1];
+                    filterValue = (String) filter[2];
+                    filterEnabled = ((Boolean) filter[3]).booleanValue();
+                    filterNote = (String) filter[4];
+                    
+                    if (searchQuery.isEmpty()) {
+                        card = createFilterCard(activity, rootLayout, dialog, state, filterType, filterField, filterValue, filterEnabled, filterNote, this);
+                        filtersContainer.addView(card);
+                        matchCount++;
+                    } else {
+                        cleanValue = filterValue.replace("*", "").toLowerCase();
+                        matchType = getMatchType(filterValue);
+                        filterMatches = false;
+                        if (matchType.equals("matches")) filterMatches = searchQuery.equals(cleanValue);
+                        else if (matchType.equals("contains")) filterMatches = searchQuery.contains(cleanValue);
+                        else if (matchType.equals("starts with")) filterMatches = searchQuery.startsWith(cleanValue);
+                        else if (matchType.equals("ends with")) filterMatches = searchQuery.endsWith(cleanValue);
+                        
+                        if (filterMatches) {
+                            card = createFilterCard(activity, rootLayout, dialog, state, filterType, filterField, filterValue, filterEnabled, filterNote, this);
+                            filtersContainer.addView(card);
+                            matchCount++;
+                        }
+                    }
+                }
+
+                if (matchCount == 0 && !searchQuery.isEmpty()) {
+                    noResultsText = new TextView(activity);
+                    noResultsText.setText("No filters match \"" + searchQuery + "\"");
+                    noResultsText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+                    noResultsText.setTextColor(getColorInt("on-surface-variant"));
+                    noResultsText.setGravity(Gravity.CENTER);
+                    noResultsText.setPadding(u.dpToPx(20), u.dpToPx(32), u.dpToPx(20), u.dpToPx(32));
+                    noResultsParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    noResultsText.setLayoutParams(noResultsParams);
+                    filtersContainer.addView(noResultsText);
+                }
+            }
+        };
+
+        searchInput.addTextChangedListener(new android.text.TextWatcher() {
+            beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            onTextChanged(CharSequence s, int start, int before, int count) {}
+            afterTextChanged(android.text.Editable s) {
+                refreshFiltersList.run();
+            }
+        });
+
+        refreshFiltersList.run();
+        filtersScroll.addView(filtersContainer);
+        filtersListContainer.addView(filtersScroll);
+        rootLayout.addView(filtersListContainer);
+
+        buttonLayout = new LinearLayout(activity);
+        buttonLayout.setOrientation(LinearLayout.HORIZONTAL);
+        buttonLayout.setGravity(Gravity.CENTER);
+        buttonLayout.setPadding(u.dpToPx(16), u.dpToPx(8), u.dpToPx(16), u.dpToPx(16));
+        
+        addButton = createStyledButton(activity, "Add", "mw_content_add", "primary", "on-primary");
+        addButtonParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        addButtonParams.rightMargin = u.dpToPx(12);
+        addButton.setLayoutParams(addButtonParams);
+        addButton.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                state.put("filterNumber", "");
+                state.put("filterName", "");
+                state.put("details", null);
+                renderUserFiltersEdit(activity, rootLayout, dialog, state, "Block", null, null, null, null);
+            }
+        });
+        buttonLayout.addView(addButton);
+        
+        pickButton = createStyledButton(activity, "Pick", "mw_action_touch_app", "primary", "on-primary");
+        pickButton.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+        pickButton.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                showPickDialog(activity, rootLayout, dialog, state);
+            }
+        });
+        buttonLayout.addView(pickButton);
+        rootLayout.addView(buttonLayout);
+    }
+
+    showUserFiltersDialog(activity, filterType, filterNumber, filterName, details) {
+        if (filterNumber == null) filterNumber = "";
+        if (filterName == null) filterName = "";
+        
+        if (filterType != null && !filterType.trim().isEmpty()) {
+            filterTypeLower = filterType.toLowerCase().trim();
+            if (filterTypeLower.equals("block")) filterType = "Block";
+            else if (filterTypeLower.equals("allow") || filterTypeLower.equals("unblock")) filterType = "Allow";
+            else filterType = "Block";
+        } else {
+            filterType = "Block";
+        }
+
+        dialog = new android.app.Dialog(activity, android.R.style.Theme_DeviceDefault_NoActionBar);
+        dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(getColorInt("background")));
+        dialog.getWindow().setLayout(android.view.WindowManager.LayoutParams.MATCH_PARENT, android.view.WindowManager.LayoutParams.MATCH_PARENT);
+        
+        rootLayout = new LinearLayout(activity);
+        rootLayout.setOrientation(LinearLayout.VERTICAL);
+        rootLayout.setBackgroundColor(getColorInt("background"));
+        rootLayout.setFocusableInTouchMode(true);
+        rootLayout.requestFocus();
+        
+        /* Apply window insets to prevent system bar overlapping */
+        rootLayout.setOnApplyWindowInsetsListener(new android.view.View.OnApplyWindowInsetsListener() {
+            onApplyWindowInsets(v, insets) {
+                v.setPadding(
+                    insets.getSystemWindowInsetLeft(),
+                    insets.getSystemWindowInsetTop(),
+                    insets.getSystemWindowInsetRight(),
+                    insets.getSystemWindowInsetBottom()
+                );
+                return insets;
+            }
+        });
+        
+        state = new HashMap();
+        state.put("filterType", filterType);
+        state.put("filterNumber", filterNumber);
+        state.put("filterName", filterName);
+        state.put("details", details);
+        state.put("currentView", "list");
+        
+        rootLayout.setOnKeyListener(new View.OnKeyListener() {
+            onKey(View v, int keyCode, android.view.KeyEvent event) {
+                if (keyCode == android.view.KeyEvent.KEYCODE_BACK && event.getAction() == android.view.KeyEvent.ACTION_UP) {
+                    if (state.get("currentView").equals("edit")) {
+                        renderUserFiltersList(activity, rootLayout, dialog, state);
+                        return true;
+                    } else {
+                        dialog.dismiss();
+                        return true;
+                    }
+                }
+                return false;
+            }
+        });
+
+        if (!filterNumber.isEmpty() || !filterName.isEmpty() || details != null) {
+            renderUserFiltersEdit(activity, rootLayout, dialog, state, filterType, null, null, null, null);
+        } else {
+            renderUserFiltersList(activity, rootLayout, dialog, state);
+        }
+
+        dialog.setContentView(rootLayout);
+        dialog.show();
+        return dialog;
+    }
+
+    cleanup() {
+        mainHandler.removeCallbacksAndMessages(null);
+        if (executorService != null) executorService.shutdownNow();
+        if (disposableMap != null) {
+            valuesArray = disposableMap.values().toArray();
+            for (int i = 0; i < valuesArray.length; i++) {
+                try { valuesArray[i].dispose(); } catch (Exception e) {}
+            }
+            disposableMap.clear();
+        }
+        if (imageLoader != null) {
+            imageLoader.shutdown();
+        }
+    }
+    
+    wrapBadges(ctx, badgesContainer, badgeList) {
+        badgesContainer.removeAllViews();
+        badgesContainer.setOrientation(LinearLayout.VERTICAL);
+        badgesContainer.setGravity(Gravity.CENTER_HORIZONTAL);
+        currentRow = new LinearLayout(ctx);
+        currentRow.setOrientation(LinearLayout.HORIZONTAL);
+        currentRow.setGravity(Gravity.CENTER_HORIZONTAL);
+        rowParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        rowParams.bottomMargin = u.dpToPx(8);
+        currentRow.setLayoutParams(rowParams);
+        badgesContainer.addView(currentRow);
+        
+        maxWidth = ctx.getResources().getDisplayMetrics().widthPixels * 0.8;
+        currentWidth = 0;
+        badgeMargin = u.dpToPx(6);
+        
+        for (int i = 0; i < badgeList.size(); i++) {
+            badge = badgeList.get(i);
+            badge.measure(0, 0);
+            badgeWidth = badge.getMeasuredWidth() + badgeMargin;
+            if (currentWidth + badgeWidth > maxWidth) {
+                currentRow = new LinearLayout(ctx);
+                currentRow.setOrientation(LinearLayout.HORIZONTAL);
+                currentRow.setGravity(Gravity.CENTER_HORIZONTAL);
+                rowParams2 = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+                rowParams2.bottomMargin = u.dpToPx(8);
+                currentRow.setLayoutParams(rowParams2);
+                badgesContainer.addView(currentRow);
+                currentWidth = 0;
+            }
+            params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            );
+            params.rightMargin = badgeMargin;
+            currentRow.addView(badge, params);
+            currentWidth += badgeWidth;
+        }
+    }
+
+    createBadge(ctx, text, iconName, bgColor, fgColor) {
+        badge = new LinearLayout(ctx);
+        badge.setOrientation(LinearLayout.HORIZONTAL);
+        badge.setGravity(Gravity.CENTER_VERTICAL);
+        badge.setPadding(u.dpToPx(8), u.dpToPx(6), u.dpToPx(8), u.dpToPx(6));
+        bg = createCardBackground(bgColor, 12);
+        badge.setBackground(bg);
+        badgeParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        badgeParams.rightMargin = u.dpToPx(6);
+        badgeParams.topMargin = u.dpToPx(4);
+        badge.setLayoutParams(badgeParams);
+        
+        if (u.isValidString(iconName)) {
+            icon = new ImageView(ctx);
+            iconSize = u.dpToPx(16);
+            iconParams = new LinearLayout.LayoutParams(iconSize, iconSize);
+            iconParams.rightMargin = u.dpToPx(4);
+            icon.setLayoutParams(iconParams);
+            icon.setColorFilter(Color.parseColor(fgColor));
+            if (iconName.startsWith("http://") || iconName.startsWith("https://")) {
+                loadIconAsync(iconName, icon);
+            } else {
+                drawable = getDrawable(ctx, iconName);
+                if (drawable != null) icon.setImageDrawable(drawable);
+            }
+            badge.addView(icon);
+        }
+        if (u.isValidString(text)) {
+            textView = new TextView(ctx);
+            textView.setText(text);
+            textView.setTextColor(Color.parseColor(fgColor));
+            textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            textView.setTypeface(null, Typeface.BOLD);
+            badge.addView(textView);
+        }
+        return badge;
+    }
+
+    createBadgesContainer(ctx, isVerified, spamScore, dataObj, warningMap) {
+        badgeList = new java.util.ArrayList();
+        
+        if (isVerified) {
+            badgeList.add(createBadge(ctx, "Verified", "mw_action_verified_user", getThemeColor("tertiary-container"), getThemeColor("on-tertiary-container")));
+        }
+        if (spamScore > 0) {
+            spamText = spamScore + (spamScore == 1 ? " report" : " reports");
+            badgeList.add(createBadge(ctx, spamText, "mw_action_report_problem", "#FFEBEE", "#D32F2F"));
+        }
+        if (dataObj != null) {
+            try {
+                if (dataObj.has("spamInfo")) {
+                    spamInfo = dataObj.getJSONObject("spamInfo");
+                    if (spamInfo.has("spamType")) {
+                        spamType = spamInfo.getString("spamType");
+                        if (u.isValidString(spamType)) {
+                            badgeList.add(createBadge(ctx, spamType.replace("_", " "), "mw_action_report_problem", "#FFEBEE", "#D32F2F"));
+                        }
+                    }
+                    if (spamInfo.has("spamCategories")) {
+                        spamCategories = spamInfo.getJSONArray("spamCategories");
+                        for (int i = 0; i < spamCategories.length(); i++) {
+                            categoryId = spamCategories.getInt(i);
+                            categoryDetails = d.getSpamCategoryDetails(categoryId);
+                            if (categoryDetails != null) {
+                                badgeList.add(createBadge(ctx, categoryDetails[0], categoryDetails[1], "#FFEBEE", "#D32F2F"));
+                            }
+                        }
+                    }
+                }
+                if (dataObj.has("tags")) {
+                    tagsArray = dataObj.getJSONArray("tags");
+                    for (int i = 0; i < tagsArray.length(); i++) {
+                        tagId = tagsArray.getString(i);
+                        tagDetails = d.getTagDetails(tagId);
+                        if (tagDetails != null) {
+                            badgeList.add(createBadge(ctx, tagDetails[0], tagDetails[1], "#E8F5E9", "#2E7D32"));
+                        }
+                    }
+                }
+                if (dataObj.has("searchWarnings")) {
+                    warnings = dataObj.getJSONArray("searchWarnings");
+                    for (int i = 0; i < warnings.length(); i++) {
+                        warning = warnings.getJSONObject(i);
+                        warningId = warning.getString("id");
+                        warningInfo = (Object[]) warningMap.get(warningId);
+                        if (warningInfo != null) {
+                            header = (String) warningInfo[0];
+                            message = (String) warningInfo[1];
+                            bgColor = (String) warningInfo[2];
+                            fgColor = (String) warningInfo[3];
+                            icon = (String) warningInfo[4];
+                            if (warning.has("features")) {
+                                features = warning.getJSONArray("features");
+                                if (features.length() > 0) {
+                                    feature = features.getJSONObject(0);
+                                    if (feature.has("value")) {
+                                        message = feature.getString("value");
+                                    }
+                                }
+                            }
+                            if (!u.isValidString(bgColor)) bgColor = "#000000";
+                            if (!u.isValidString(fgColor)) fgColor = "#FFFFFF";
+                            badgeList.add(createBadge(ctx, u.isValidString(message) ? header + ": " + message : header, icon, bgColor, fgColor));
+                        }
+                    }
+                }
+            } catch(Exception e) {
+                u.logToFile("Error parsing badges: " + e.getMessage());
+            }
+        }
+        
+        if (badgeList.size() == 0) return null;
+        
+        badgesContainer = new LinearLayout(ctx);
+        badgesContainer.setOrientation(LinearLayout.HORIZONTAL);
+        badgesContainer.setLayoutParams(new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
+        badgesContainer.setGravity(Gravity.CENTER_HORIZONTAL);
+        badgesContainerParams = badgesContainer.getLayoutParams();
+        badgesContainerParams.topMargin = u.dpToPx(4);
+        badgesContainerParams.bottomMargin = u.dpToPx(12);
+        
+        wrapBadges(ctx, badgesContainer, badgeList);
+        return badgesContainer;
+    }
+
+    createStyledButton(ctx, text, iconName, bgColorKey, textColorKey) {
+        btn = new Button(ctx);
+        btn.setText(text);
+        btn.setTextColor(getColorInt(textColorKey));
+        btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        btn.setTypeface(null, Typeface.BOLD);
+        btn.setAllCaps(false);
+        btn.setGravity(Gravity.CENTER);
+        drawable = getDrawable(ctx, iconName);
+        if (drawable != null) {
+            drawable.setTint(getColorInt(textColorKey));
+            btn.setCompoundDrawablesWithIntrinsicBounds(null, drawable, null, null);
+            btn.setCompoundDrawablePadding(u.dpToPx(4));
+        }
+        bg = new GradientDrawable();
+        bg.setColor(getColorInt(bgColorKey));
+        bg.setCornerRadius(u.dpToPx(8));
+        btn.setBackground(bg);
+        btn.setPadding(u.dpToPx(4), u.dpToPx(4), u.dpToPx(4), u.dpToPx(4));
+        return btn;
+    }
+
+    createInfoCard(ctx, title, content, iconName, bgColorHex, textColorHex) {
+        card = new LinearLayout(ctx);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setPadding(u.dpToPx(12), u.dpToPx(12), u.dpToPx(12), u.dpToPx(12));
+        cardParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        cardParams.topMargin = u.dpToPx(8);
+        card.setLayoutParams(cardParams);
+        cardBg = createCardBackground(bgColorHex, 8);
+        card.setBackground(cardBg);
+        
+        if (u.isValidString(iconName)) {
+            icon = new ImageView(ctx);
+            iconSize = u.dpToPx(20);
+            iconParams = new LinearLayout.LayoutParams(iconSize, iconSize);
+            iconParams.rightMargin = u.dpToPx(8);
+            icon.setLayoutParams(iconParams);
+            if (iconName.startsWith("http://") || iconName.startsWith("https://")) {
+                loadIconAsync(iconName, icon);
+            } else {
+                drawable = getDrawable(ctx, iconName);
+                if (drawable != null) {
+                    icon.setImageDrawable(drawable);
+                    icon.setColorFilter(Color.parseColor(textColorHex));
+                }
+            }
+            card.addView(icon);
+        }
+        
+        contentColumn = new LinearLayout(ctx);
+        contentColumn.setOrientation(LinearLayout.VERTICAL);
+        contentColumn.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+        titleText = new TextView(ctx);
+        titleText.setText(title);
+        titleText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        titleText.setTypeface(null, Typeface.BOLD);
+        titleText.setTextColor(Color.parseColor(textColorHex));
+        contentColumn.addView(titleText);
+        
+        contentText = new TextView(ctx);
+        contentText.setText(content);
+        contentText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        contentText.setTextColor(Color.parseColor(textColorHex));
+        contentTextParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        contentTextParams.topMargin = u.dpToPx(4);
+        contentText.setLayoutParams(contentTextParams);
+        contentColumn.addView(contentText);
+        
+        card.addView(contentColumn);
+        return card;
+    }
+    
+    reloadColors() {
+        themeColors.clear();
+        colorCache.clear();
+        tcTheme = tasker.getVariable("TC_theme");
+        if (tcTheme == null || tcTheme.isEmpty()) {
+            tcTheme = "Auto Dark Light";
+        }
+        
+        themeObj = generateTheme(tcTheme);
+        if (themeObj != null) {
+            try {
+                keys = themeObj.keys();
+                while (keys.hasNext()) {
+                    key = (String) keys.next();
+                    themeColors.put(key, themeObj.getString(key));
+                }
+            } catch (Exception e) {
+                u.logToFile("Error parsing generated theme: " + e.getMessage());
+            }
+        }
+    }
+
+    isNightMode() {
+        configuration = context.getResources().getConfiguration();
+        return (configuration.uiMode & 48) == 32; // UI_MODE_NIGHT_YES
+    }
+
+    getSystemColor(colorName) {
+        resId = context.getResources().getIdentifier(colorName, "color", "android");
+        if (resId != 0) {
+            color = context.getResources().getColor(resId);
+            return String.format("#%06X", new Object[]{new Integer(0xFFFFFF & color)});
+        }
+        return null;
+    }
+
+    extractMaterialYouColors() {
+        sdkStr = tasker.getVariable("SDK");
+        sdk = sdkStr != null ? Integer.parseInt(sdkStr) : 30;
+        if (sdk < 31) return null;
+        
+        palette = new org.json.JSONObject();
+        isDark = isNightMode();
+        try {
+            if (isDark) {
+                palette.put("primary", getSystemColor("system_accent1_200"));
+                palette.put("on-primary", getSystemColor("system_accent1_800"));
+                palette.put("primary-container", getSystemColor("system_accent1_700"));
+                palette.put("on-primary-container", getSystemColor("system_accent1_100"));
+                palette.put("secondary", getSystemColor("system_accent2_200"));
+                palette.put("on-secondary", getSystemColor("system_accent2_800"));
+                palette.put("secondary-container", getSystemColor("system_accent2_700"));
+                palette.put("on-secondary-container", getSystemColor("system_accent2_100"));
+                palette.put("tertiary", getSystemColor("system_accent3_200"));
+                palette.put("on-tertiary", getSystemColor("system_accent3_800"));
+                palette.put("tertiary-container", getSystemColor("system_accent3_700"));
+                palette.put("on-tertiary-container", getSystemColor("system_accent3_200"));
+                palette.put("background", getSystemColor("system_neutral1_900"));
+                palette.put("on-background", getSystemColor("system_neutral1_100"));
+                palette.put("surface", getSystemColor("system_neutral1_900"));
+                palette.put("on-surface", getSystemColor("system_neutral1_100"));
+                palette.put("surface-variant", getSystemColor("system_neutral2_700"));
+                palette.put("on-surface-variant", getSystemColor("system_neutral2_200"));
+                palette.put("outline", getSystemColor("system_neutral2_500"));
+                palette.put("outline-variant", getSystemColor("system_neutral2_800"));
+            } else {
+                palette.put("primary", getSystemColor("system_accent1_600"));
+                palette.put("on-primary", getSystemColor("system_accent1_0"));
+                palette.put("primary-container", getSystemColor("system_accent1_100"));
+                palette.put("on-primary-container", getSystemColor("system_accent1_900"));
+                palette.put("secondary", getSystemColor("system_accent2_600"));
+                palette.put("on-secondary", getSystemColor("system_accent2_0"));
+                palette.put("secondary-container", getSystemColor("system_accent2_100"));
+                palette.put("on-secondary-container", getSystemColor("system_accent2_900"));
+                palette.put("tertiary", getSystemColor("system_accent3_500"));
+                palette.put("on-tertiary", getSystemColor("system_accent3_50"));
+                palette.put("tertiary-container", getSystemColor("system_accent3_100"));
+                palette.put("on-tertiary-container", getSystemColor("system_accent3_900"));
+                palette.put("background", getSystemColor("system_neutral1_10"));
+                palette.put("on-background", getSystemColor("system_neutral1_900"));
+                palette.put("surface", getSystemColor("system_neutral1_10"));
+                palette.put("on-surface", getSystemColor("system_neutral1_900"));
+                palette.put("surface-variant", getSystemColor("system_neutral2_100"));
+                palette.put("on-surface-variant", getSystemColor("system_neutral2_700"));
+                palette.put("outline", getSystemColor("system_neutral2_500"));
+                palette.put("outline-variant", getSystemColor("system_neutral2_300"));
+            }
+            palette.put("error", "#B00020");
+            palette.put("on-error", "#FFFFFF");
+            return palette;
+        } catch (Exception e) { return null; }
+    }
+
+    hslToHex(hVal, sVal, lVal) {
+        sNorm = sVal / 100.0f; lNorm = lVal / 100.0f;
+        c = (1.0f - Math.abs(2.0f * lNorm - 1.0f)) * sNorm;
+        x = c * (1.0f - Math.abs((hVal / 60.0f) % 2.0f - 1.0f));
+        m = lNorm - c / 2.0f;
+        rOut = 0.0f; gOut = 0.0f; bOut = 0.0f;
+        if (hVal >= 0 && hVal < 60) { rOut = c; gOut = x; bOut = 0.0f; }
+        else if (hVal >= 60 && hVal < 120) { rOut = x; gOut = c; bOut = 0.0f; }
+        else if (hVal >= 120 && hVal < 180) { rOut = 0.0f; gOut = c; bOut = x; }
+        else if (hVal >= 180 && hVal < 240) { rOut = 0.0f; gOut = x; bOut = c; }
+        else if (hVal >= 240 && hVal < 300) { rOut = x; gOut = 0.0f; bOut = c; }
+        else if (hVal >= 300 && hVal < 360) { rOut = c; gOut = 0.0f; bOut = x; }
+        rFinal = Math.round((rOut + m) * 255.0f);
+        gFinal = Math.round((gOut + m) * 255.0f);
+        bFinal = Math.round((bOut + m) * 255.0f);
+        return String.format("#%02X%02X%02X", new Object[]{new Integer(rFinal), new Integer(gFinal), new Integer(bFinal)});
+    }
+
+    generatePaletteFromColor(hexColor, isDark) {
+        palette = new org.json.JSONObject();
+        color = Color.parseColor(hexColor);
+        r = Color.red(color) / 255.0f; g = Color.green(color) / 255.0f; b = Color.blue(color) / 255.0f;
+        max = Math.max(Math.max(r, g), b); min = Math.min(Math.min(r, g), b);
+        h = 0.0f; s = 0.0f; l = (max + min) / 2.0f;
+        if (max != min) {
+            d = max - min;
+            s = l > 0.5f ? d / (2.0f - max - min) : d / (max + min);
+            if (max == r) h = (g - b) / d + (g < b ? 6.0f : 0.0f);
+            else if (max == g) h = (b - r) / d + 2.0f;
+            else h = (r - g) / d + 4.0f;
+            h /= 6.0f;
+        }
+        hue = Math.round(h * 360.0f); saturation = Math.round(s * 100.0f);
+        secondaryHue = (hue + 30) % 360; tertiaryHue = (hue + 60) % 360;
+        secondarySat = (int)(saturation * 0.4f); tertiarySat = (int)(saturation * 0.6f);
+        
+        if (isDark) {
+            palette.put("primary", hslToHex(hue, saturation, 80));
+            palette.put("on-primary", hslToHex(hue, saturation, 20));
+            palette.put("primary-container", hslToHex(hue, saturation, 30));
+            palette.put("on-primary-container", hslToHex(hue, saturation, 90));
+            palette.put("secondary", hslToHex(secondaryHue, secondarySat, 80));
+            palette.put("on-secondary", hslToHex(secondaryHue, secondarySat, 20));
+            palette.put("secondary-container", hslToHex(secondaryHue, secondarySat, 30));
+            palette.put("on-secondary-container", hslToHex(secondaryHue, secondarySat, 90));
+            palette.put("tertiary", hslToHex(tertiaryHue, tertiarySat, 80));
+            palette.put("on-tertiary", hslToHex(tertiaryHue, tertiarySat, 20));
+            palette.put("tertiary-container", hslToHex(tertiaryHue, tertiarySat, 30));
+            palette.put("on-tertiary-container", hslToHex(tertiaryHue, tertiarySat, 90));
+            palette.put("background", hslToHex(hue, 5, 10));
+            palette.put("on-background", hslToHex(hue, 5, 90));
+            palette.put("surface", hslToHex(hue, 5, 10));
+            palette.put("on-surface", hslToHex(hue, 5, 90));
+            palette.put("surface-variant", hslToHex(hue, 5, 30));
+            palette.put("on-surface-variant", hslToHex(hue, 5, 80));
+            palette.put("outline", hslToHex(hue, 5, 60));
+            palette.put("outline-variant", hslToHex(hue, 5, 30));
+        } else {
+            palette.put("primary", hslToHex(hue, saturation, 40));
+            palette.put("on-primary", hslToHex(hue, saturation, 100));
+            palette.put("primary-container", hslToHex(hue, saturation, 90));
+            palette.put("on-primary-container", hslToHex(hue, saturation, 10));
+            palette.put("secondary", hslToHex(secondaryHue, secondarySat, 40));
+            palette.put("on-secondary", hslToHex(secondaryHue, secondarySat, 100));
+            palette.put("secondary-container", hslToHex(secondaryHue, secondarySat, 90));
+            palette.put("on-secondary-container", hslToHex(secondaryHue, secondarySat, 10));
+            palette.put("tertiary", hslToHex(tertiaryHue, tertiarySat, 40));
+            palette.put("on-tertiary", hslToHex(tertiaryHue, tertiarySat, 100));
+            palette.put("tertiary-container", hslToHex(tertiaryHue, tertiarySat, 90));
+            palette.put("on-tertiary-container", hslToHex(tertiaryHue, tertiarySat, 10));
+            palette.put("background", hslToHex(hue, 5, 99));
+            palette.put("on-background", hslToHex(hue, 5, 10));
+            palette.put("surface", hslToHex(hue, 5, 99));
+            palette.put("on-surface", hslToHex(hue, 5, 10));
+            palette.put("surface-variant", hslToHex(hue, 5, 90));
+            palette.put("on-surface-variant", hslToHex(hue, 5, 30));
+            palette.put("outline", hslToHex(hue, 5, 50));
+            palette.put("outline-variant", hslToHex(hue, 5, 80));
+        }
+        palette.put("error", "#B00020");
+        palette.put("on-error", "#FFFFFF");
+        return palette;
+    }
+
+    generateTheme(themeValue) {
+        palette = new org.json.JSONObject();
+        isDark = isNightMode();
+        if (themeValue.equals("Material You")) {
+            palette = extractMaterialYouColors();
+            if (palette != null) return palette;
+            themeValue = "Auto Dark Light";
+        }
+        if (themeValue.equals("Auto Dark Light")) themeValue = isDark ? "Dark" : "Light";
+        
+        if (themeValue.equals("Dark")) {
+            palette.put("primary", "#FFFFFF"); palette.put("on-primary", "#000000");
+            palette.put("primary-container", "#222222"); palette.put("on-primary-container", "#FFFFFF");
+            palette.put("secondary", "#BBBBBB"); palette.put("on-secondary", "#000000");
+            palette.put("secondary-container", "#444444"); palette.put("on-secondary-container", "#FFFFFF");
+            palette.put("tertiary", "#888888"); palette.put("on-tertiary", "#000000");
+            palette.put("tertiary-container", "#222222"); palette.put("on-tertiary-container", "#FFFFFF");
+            palette.put("background", "#000000"); palette.put("on-background", "#FFFFFF");
+            palette.put("surface", "#121212"); palette.put("on-surface", "#FFFFFF");
+            palette.put("surface-variant", "#222222"); palette.put("on-surface-variant", "#DDDDDD");
+            palette.put("outline", "#777777"); palette.put("outline-variant", "#444444");
+            palette.put("error", "#B00020"); palette.put("on-error", "#FFFFFF");
+        } else if (themeValue.equals("Light")) {
+            palette.put("primary", "#000000"); palette.put("on-primary", "#FFFFFF");
+            palette.put("primary-container", "#E0E0E0"); palette.put("on-primary-container", "#000000");
+            palette.put("secondary", "#333333"); palette.put("on-secondary", "#FFFFFF");
+            palette.put("secondary-container", "#F5F5F5"); palette.put("on-secondary-container", "#000000");
+            palette.put("tertiary", "#666666"); palette.put("on-tertiary", "#FFFFFF");
+            palette.put("tertiary-container", "#DDDDDD"); palette.put("on-tertiary-container", "#000000");
+            palette.put("background", "#FFFFFF"); palette.put("on-background", "#000000");
+            palette.put("surface", "#FFFFFF"); palette.put("on-surface", "#000000");
+            palette.put("surface-variant", "#F0F0F0"); palette.put("on-surface-variant", "#333333");
+            palette.put("outline", "#999999"); palette.put("outline-variant", "#CCCCCC");
+            palette.put("error", "#B00020"); palette.put("on-error", "#FFFFFF");
+        } else if (themeValue.startsWith("#")) {
+            palette = generatePaletteFromColor(themeValue, isDark);
+        }
+        return palette;
+    }
+
+    createThemedCheckbox(activity, varName, defaultValue) {
+        checkbox = new android.widget.CheckBox(activity);
+        checkbox.setButtonDrawable(null);
+        checkedDrawable = getDrawable(activity, "mw_toggle_check_box");
+        uncheckedDrawable = getDrawable(activity, "mw_toggle_check_box_outline_blank");
+        if (checkedDrawable != null) checkedDrawable.setTint(getColorInt("primary"));
+        if (uncheckedDrawable != null) uncheckedDrawable.setTint(getColorInt("outline"));
+        
+        savedValue = tasker.getVariable(varName);
+        if (savedValue == null) {
+            checkbox.setChecked(defaultValue);
+            tasker.setVariable(varName, defaultValue ? "true" : "false");
+        } else {
+            checkbox.setChecked(savedValue.equals("true"));
+        }
+        
+        checkbox.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
+            onCheckedChanged(android.widget.CompoundButton buttonView, boolean isChecked) {
+                tasker.setVariable(varName, isChecked ? "true" : "false");
+                taskVars = new java.util.HashMap();
+                taskVars.put("par1", "enable");
+                tasker.callTask("Truecaller - Helper", taskVars);
+                drawable = isChecked ? checkedDrawable : uncheckedDrawable;
+                if (drawable != null) buttonView.setButtonDrawable(drawable);
+            }
+        });
+        
+        initialDrawable = checkbox.isChecked() ? checkedDrawable : uncheckedDrawable;
+        if (initialDrawable != null) checkbox.setButtonDrawable(initialDrawable);
+        return checkbox;
+    }
+
+    createThemedSettingsButton(activity, text) {
+        button = new android.widget.Button(activity);
+        button.setText(text);
+        button.setTextColor(getColorInt("on-primary"));
+        bg = new GradientDrawable();
+        bg.setColor(getColorInt("primary"));
+        bg.setCornerRadius(u.dpToPx(10));
+        button.setBackground(bg);
+        button.setPadding(u.dpToPx(16), u.dpToPx(10), u.dpToPx(16), u.dpToPx(10));
+        button.setAllCaps(false);
+        return button;
+    }
+
+    createSettingItem(activity, label, control) {
+        container = new LinearLayout(activity);
+        container.setOrientation(LinearLayout.HORIZONTAL);
+        container.setGravity(Gravity.CENTER_VERTICAL);
+        container.setPadding(u.dpToPx(16), u.dpToPx(12), u.dpToPx(16), u.dpToPx(12));
+        container.setBackground(createCardBackground(getThemeColor("surface"), 16));
+        params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.setMargins(u.dpToPx(8), u.dpToPx(8), u.dpToPx(8), u.dpToPx(8));
+        container.setLayoutParams(params);
+        
+        labelView = new TextView(activity);
+        labelView.setText(label);
+        labelView.setTextColor(getColorInt("on-surface"));
+        labelView.setTextSize(16);
+        labelParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        labelView.setLayoutParams(labelParams);
+        
+        container.addView(labelView);
+        container.addView(control);
+        
+        if (control instanceof android.widget.CheckBox) {
+            finalControl = (android.widget.CheckBox) control;
+            container.setOnClickListener(new View.OnClickListener() {
+                onClick(View v) { finalControl.setChecked(!finalControl.isChecked()); }
+            });
+        }
+        return container;
+    }
+
+    createSettingItemWithDescription(activity, label, description, control) {
+        container = new LinearLayout(activity);
+        container.setOrientation(LinearLayout.HORIZONTAL);
+        container.setGravity(Gravity.CENTER_VERTICAL);
+        container.setPadding(u.dpToPx(16), u.dpToPx(12), u.dpToPx(16), u.dpToPx(12));
+        container.setBackground(createCardBackground(getThemeColor("surface"), 16));
+        params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.setMargins(u.dpToPx(8), u.dpToPx(8), u.dpToPx(8), u.dpToPx(8));
+        container.setLayoutParams(params);
+        
+        textContainer = new LinearLayout(activity);
+        textContainer.setOrientation(LinearLayout.VERTICAL);
+        textParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        textContainer.setLayoutParams(textParams);
+        
+        labelView = new TextView(activity);
+        labelView.setText(label);
+        labelView.setTextColor(getColorInt("on-surface"));
+        labelView.setTextSize(16);
+        textContainer.addView(labelView);
+        
+        if (description != null && !description.isEmpty()) {
+            descView = new TextView(activity);
+            descView.setText(description);
+            descView.setTextColor(getColorInt("on-surface-variant"));
+            descView.setTextSize(12);
+            descParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            descParams.topMargin = u.dpToPx(4);
+            descView.setLayoutParams(descParams);
+            textContainer.addView(descView);
+        }
+        
+        container.addView(textContainer);
+        container.addView(control);
+        if (control instanceof android.widget.CheckBox) {
+            finalControl = (android.widget.CheckBox) control;
+            container.setOnClickListener(new View.OnClickListener() {
+                onClick(View v) { finalControl.setChecked(!finalControl.isChecked()); }
+            });
+        }
+        return container;
+    }
+
+    showColorPickerDialog(activity, currentColor, parentDialog, onThemeChanged) {
+        dialog = new android.app.Dialog(activity);
+        dialog.requestWindowFeature(1);
+        
+        mainContainer = new LinearLayout(activity);
+        mainContainer.setOrientation(LinearLayout.VERTICAL);
+        mainContainer.setBackground(createCardBackground(getThemeColor("surface"), 16));
+        mainContainer.setPadding(u.dpToPx(24), u.dpToPx(24), u.dpToPx(24), u.dpToPx(16));
+        
+        titleView = new TextView(activity);
+        titleView.setText("Choose Custom Color");
+        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+        titleView.setTypeface(null, Typeface.BOLD);
+        titleView.setTextColor(getColorInt("on-surface"));
+        titleView.setPadding(0, 0, 0, u.dpToPx(16));
+        mainContainer.addView(titleView);
+        
+        previewContainer = new LinearLayout(activity);
+        previewContainer.setOrientation(LinearLayout.HORIZONTAL);
+        previewContainer.setGravity(Gravity.CENTER_VERTICAL);
+        previewContainer.setPadding(0, 0, 0, u.dpToPx(16));
+        
+        previewLabel = new TextView(activity);
+        previewLabel.setText("Preview:");
+        previewLabel.setTextSize(16);
+        previewLabel.setTextColor(getColorInt("on-surface"));
+        previewLabelParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        previewLabelParams.rightMargin = u.dpToPx(12);
+        previewLabel.setLayoutParams(previewLabelParams);
+        previewContainer.addView(previewLabel);
+        
+        previewBox = new View(activity);
+        previewBoxParams = new LinearLayout.LayoutParams(u.dpToPx(60), u.dpToPx(60));
+        previewBox.setLayoutParams(previewBoxParams);
+        previewBoxBg = new GradientDrawable();
+        previewBoxBg.setCornerRadius(u.dpToPx(8));
+        previewBoxBg.setColor(currentColor != null && currentColor.startsWith("#") ? Color.parseColor(currentColor) : getColorInt("primary"));
+        previewBox.setBackground(previewBoxBg);
+        previewContainer.addView(previewBox);
+        mainContainer.addView(previewContainer);
+        
+        hexInputLabel = new TextView(activity);
+        hexInputLabel.setText("Hex Color Code:");
+        hexInputLabel.setTextSize(14);
+        hexInputLabel.setTextColor(getColorInt("on-surface"));
+        hexInputLabel.setPadding(0, 0, 0, u.dpToPx(8));
+        mainContainer.addView(hexInputLabel);
+        
+        hexInput = new android.widget.EditText(activity);
+        hexInput.setHint("#FF5722");
+        hexInput.setSingleLine(true);
+        hexInput.setTextSize(16);
+        hexInput.setTextColor(getColorInt("on-surface"));
+        hexInput.setHintTextColor(getColorInt("on-surface-variant"));
+        hexInputBg = new GradientDrawable();
+        hexInputBg.setColor(getColorInt("surface-variant"));
+        hexInputBg.setCornerRadius(u.dpToPx(8));
+        hexInput.setBackground(hexInputBg);
+        hexInput.setPadding(u.dpToPx(16), u.dpToPx(12), u.dpToPx(16), u.dpToPx(12));
+        hexInputParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        hexInputParams.bottomMargin = u.dpToPx(16);
+        hexInput.setLayoutParams(hexInputParams);
+        
+        if (currentColor != null && currentColor.startsWith("#")) hexInput.setText(currentColor);
+        
+        hexInput.addTextChangedListener(new android.text.TextWatcher() {
+            beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            onTextChanged(CharSequence s, int start, int before, int count) {}
+            afterTextChanged(android.text.Editable s) {
+                colorText = s.toString().trim();
+                if (!colorText.startsWith("#")) colorText = "#" + colorText;
+                if (colorText.length() == 7 || colorText.length() == 9) {
+                    try {
+                        newColor = Color.parseColor(colorText);
+                        updateBg = new GradientDrawable();
+                        updateBg.setCornerRadius(u.dpToPx(8));
+                        updateBg.setColor(newColor);
+                        previewBox.setBackground(updateBg);
+                    } catch (Exception e) {}
+                }
+            }
+        });
+        mainContainer.addView(hexInput);
+        
+        presetsLabel = new TextView(activity);
+        presetsLabel.setText("Quick Presets:");
+        presetsLabel.setTextSize(14);
+        presetsLabel.setTextColor(getColorInt("on-surface"));
+        presetsLabel.setPadding(0, 0, 0, u.dpToPx(12));
+        mainContainer.addView(presetsLabel);
+        
+        presetColors = new String[]{
+            "#F44336", "#E91E63", "#9C27B0", "#673AB7",
+            "#3F51B5", "#2196F3", "#03A9F4", "#00BCD4",
+            "#009688", "#4CAF50", "#8BC34A", "#CDDC39",
+            "#FFEB3B", "#FFC107", "#FF9800", "#FF5722"
+        };
+        
+        currentRow = null;
+        for (int i = 0; i < presetColors.length; i++) {
+            if (i % 4 == 0) {
+                currentRow = new LinearLayout(activity);
+                currentRow.setOrientation(LinearLayout.HORIZONTAL);
+                currentRow.setGravity(Gravity.CENTER);
+                rowParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                rowParams.bottomMargin = u.dpToPx(8);
+                currentRow.setLayoutParams(rowParams);
+                mainContainer.addView(currentRow);
+            }
+            presetBtn = new View(activity);
+            presetBtnParams = new LinearLayout.LayoutParams(u.dpToPx(48), u.dpToPx(48));
+            presetBtnParams.setMargins(u.dpToPx(4), 0, u.dpToPx(4), 0);
+            presetBtn.setLayoutParams(presetBtnParams);
+            pBg = new GradientDrawable();
+            pBg.setCornerRadius(u.dpToPx(8));
+            pBg.setColor(Color.parseColor(presetColors[i]));
+            presetBtn.setBackground(pBg);
+            presetBtn.setTag(presetColors[i]);
+            presetBtn.setOnClickListener(new View.OnClickListener() {
+                onClick(View v) { hexInput.setText((String) v.getTag()); }
+            });
+            currentRow.addView(presetBtn);
+        }
+        
+        buttonContainer = new LinearLayout(activity);
+        buttonContainer.setOrientation(LinearLayout.HORIZONTAL);
+        buttonContainer.setGravity(Gravity.END);
+        buttonContainer.setPadding(0, u.dpToPx(16), 0, 0);
+        
+        cancelBtn = new android.widget.Button(activity);
+        cancelBtn.setText("Cancel");
+        cancelBtn.setTextColor(getColorInt("primary"));
+        cancelBtn.setBackgroundColor(Color.TRANSPARENT);
+        cancelBtn.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) { dialog.dismiss(); }
+        });
+        buttonContainer.addView(cancelBtn);
+        
+        applyBtn = new android.widget.Button(activity);
+        applyBtn.setText("Apply");
+        applyBtn.setTextColor(getColorInt("on-primary"));
+        aBg = new GradientDrawable();
+        aBg.setColor(getColorInt("primary"));
+        aBg.setCornerRadius(u.dpToPx(8));
+        applyBtn.setBackground(aBg);
+        applyBtn.setPadding(u.dpToPx(16), u.dpToPx(8), u.dpToPx(16), u.dpToPx(8));
+        applyBtnParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        applyBtnParams.leftMargin = u.dpToPx(8);
+        applyBtn.setLayoutParams(applyBtnParams);
+        
+        applyBtn.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                colorText = hexInput.getText().toString().trim();
+                if (!colorText.startsWith("#")) colorText = "#" + colorText;
+                if (colorText.length() == 7 || colorText.length() == 9) {
+                    try {
+                        Color.parseColor(colorText);
+                        tasker.setVariable("TC_theme", colorText);
+                        reloadColors();
+                        if (onThemeChanged != null) { onThemeChanged.run(); }
+                        
+                        if (parentDialog != null) {
+                            parentDialog.setOnDismissListener(null);
+                            parentDialog.dismiss();
+                        }
+                        dialog.dismiss();
+                        
+                        tasker.showToast("Theme updated");
+                        showSettingsDialog(activity, onThemeChanged);
+                    } catch (Exception e) { tasker.showToast("Invalid color code"); }
+                } else {
+                    tasker.showToast("Please enter valid hex color");
+                }
+            }
+        });
+        buttonContainer.addView(applyBtn);
+        mainContainer.addView(buttonContainer);
+        
+        dialog.setContentView(mainContainer);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+            dialog.getWindow().setLayout((int)(activity.getResources().getDisplayMetrics().widthPixels * 0.90), ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+        dialog.show();
+    }
+
+    createSettingPickerButton(activity, label, varName, options, defaultValue, parentDialog, onThemeChanged) {
+        pickerButton = createThemedSettingsButton(activity, "");
+        pickerButton.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        savedValue = tasker.getVariable(varName);
+        if (savedValue == null) {
+            savedValue = defaultValue;
+            tasker.setVariable(varName, defaultValue);
+        }
+        if (varName.equals("TC_theme") && savedValue.startsWith("#")) pickerButton.setText("Custom: " + savedValue);
+        else pickerButton.setText(savedValue);
+
+        pickerButton.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                final android.app.Dialog dialog = new android.app.Dialog(activity);
+                dialog.requestWindowFeature(1);
+                
+                root = new LinearLayout(activity);
+                root.setOrientation(LinearLayout.VERTICAL);
+                root.setBackground(createCardBackground(getThemeColor("surface"), 16));
+                
+                titleView = new TextView(activity);
+                titleView.setText(label);
+                titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+                titleView.setTypeface(null, Typeface.BOLD);
+                titleView.setTextColor(getColorInt("on-surface"));
+                titleView.setPadding(u.dpToPx(24), u.dpToPx(24), u.dpToPx(24), u.dpToPx(12));
+                root.addView(titleView);
+                
+                scrollHost = new android.widget.ScrollView(activity);
+                listContainer = new LinearLayout(activity);
+                listContainer.setOrientation(LinearLayout.VERTICAL);
+                listContainer.setPadding(u.dpToPx(8), 0, u.dpToPx(8), 0);
+                scrollHost.addView(listContainer);
+                
+                scrollParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f);
+                root.addView(scrollHost, scrollParams);
+
+                currentValue = tasker.getVariable(varName);
+                for (int i = 0; i < options.length; i++) {
+                    final String opt = options[i];
+                    rb = new android.widget.RadioButton(activity);
+                    rb.setText(opt);
+                    rb.setTextSize(16);
+                    rb.setTextColor(getColorInt("on-surface"));
+                    rb.setPadding(u.dpToPx(16), u.dpToPx(12), u.dpToPx(16), u.dpToPx(12));
+                    if (android.os.Build.VERSION.SDK_INT >= 21) {
+                        rb.setButtonTintList(android.content.res.ColorStateList.valueOf(getColorInt("primary")));
+                    }
+                    if (opt.equals(currentValue)) rb.setChecked(true);
+                    
+                    rb.setOnClickListener(new View.OnClickListener() {
+                        onClick(View v2) {
+                            selectedValue = opt;
+                            oldValue = tasker.getVariable(varName);
+                            if (varName.equals("TC_theme") && selectedValue.equals("Custom Color")) {
+                                dialog.dismiss();
+                                currentTheme = tasker.getVariable("TC_theme");
+                                currentColor = (currentTheme != null && currentTheme.startsWith("#")) ? currentTheme : null;
+                                showColorPickerDialog(activity, currentColor, parentDialog, onThemeChanged);
+                                return;
+                            }
+                            pickerButton.setText(selectedValue);
+                            if (oldValue != null && !oldValue.equals(selectedValue)) {
+                                tasker.setVariable(varName, selectedValue);
+                                if (varName.equals("TC_theme")) {
+                                    reloadColors();
+                                    if (onThemeChanged != null) { onThemeChanged.run(); }
+                                    
+                                    if (parentDialog != null) {
+                                        parentDialog.setOnDismissListener(null);
+                                        parentDialog.dismiss();
+                                    }
+                                    dialog.dismiss();
+                                    
+                                    showSettingsDialog(activity, onThemeChanged);
+                                    return;
+                                }
+                            } else if (oldValue == null) {
+                                tasker.setVariable(varName, selectedValue);
+                            }
+                            dialog.dismiss();
+                        }
+                    });
+                    listContainer.addView(rb);
+                }
+
+                footer = new LinearLayout(activity);
+                footer.setOrientation(LinearLayout.HORIZONTAL);
+                footer.setGravity(Gravity.END);
+                footer.setPadding(u.dpToPx(8), u.dpToPx(8), u.dpToPx(24), u.dpToPx(16));
+                
+                cancelBtn = new android.widget.Button(activity);
+                cancelBtn.setText("Cancel");
+                cancelBtn.setTextColor(getColorInt("primary"));
+                cancelBtn.setBackgroundColor(Color.TRANSPARENT);
+                cancelBtn.setOnClickListener(new View.OnClickListener() {
+                    onClick(View v3) { dialog.dismiss(); }
+                });
+                footer.addView(cancelBtn);
+                root.addView(footer);
+
+                dialog.setContentView(root);
+                if (dialog.getWindow() != null) {
+                    dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+                    dialog.getWindow().setLayout((int)(activity.getResources().getDisplayMetrics().widthPixels * 0.90), ViewGroup.LayoutParams.WRAP_CONTENT);
+                }
+                dialog.show();
+            }
+        });
+        return createSettingItem(activity, label, pickerButton);
+    }
+
+    showSettingsDialog(activity, onThemeChanged) {
+        dialog = new android.app.Dialog(activity, android.R.style.Theme_DeviceDefault_NoActionBar);
+        dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(getColorInt("background")));
+        dialog.getWindow().setLayout(android.view.WindowManager.LayoutParams.MATCH_PARENT, android.view.WindowManager.LayoutParams.MATCH_PARENT);
+        
+        mainLayout = new LinearLayout(activity);
+        mainLayout.setOrientation(LinearLayout.VERTICAL);
+        mainLayout.setBackgroundColor(getColorInt("surface-variant"));
+        mainLayout.setFocusableInTouchMode(true);
+        mainLayout.requestFocus();
+        mainLayout.setFitsSystemWindows(true);
+        
+        mainLayout.setOnApplyWindowInsetsListener(new android.view.View.OnApplyWindowInsetsListener() {
+            onApplyWindowInsets(v, insets) {
+                v.setPadding(
+                    insets.getSystemWindowInsetLeft(),
+                    insets.getSystemWindowInsetTop(),
+                    insets.getSystemWindowInsetRight(),
+                    insets.getSystemWindowInsetBottom()
+                );
+                return insets;
+            }
+        });
+
+        // Header
+        headerLayout = new LinearLayout(activity);
+        headerLayout.setOrientation(LinearLayout.HORIZONTAL);
+        headerLayout.setBackgroundColor(getColorInt("primary"));
+        headerLayout.setPadding(u.dpToPx(4), u.dpToPx(4), u.dpToPx(4), u.dpToPx(4));
+        headerLayout.setGravity(Gravity.CENTER_VERTICAL);
+        
+        backButton = createIconButton(activity, "mw_navigation_arrow_back", getThemeColor("on-primary"));
+        backButtonParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        backButtonParams.rightMargin = u.dpToPx(8);
+        backButton.setLayoutParams(backButtonParams);
+        backButton.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) { dialog.dismiss(); }
+        });
+        headerLayout.addView(backButton);
+        
+        titleText = new TextView(activity);
+        titleText.setText("Settings");
+        titleText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+        titleText.setTypeface(null, Typeface.BOLD);
+        titleText.setTextColor(getColorInt("on-primary"));
+        titleText.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+        headerLayout.addView(titleText);
+        mainLayout.addView(headerLayout);
+
+        // Tabs setup
+        generalTab = new LinearLayout(activity);
+        generalTab.setOrientation(LinearLayout.VERTICAL);
+        callerIdTab = new LinearLayout(activity);
+        callerIdTab.setOrientation(LinearLayout.VERTICAL);
+        filterTab = new LinearLayout(activity);
+        filterTab.setOrientation(LinearLayout.VERTICAL);
+
+        generalTabScroll = new android.widget.ScrollView(activity);
+        generalTabScroll.addView(generalTab);
+        generalTabScroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
+        generalTabScroll.setVisibility(View.VISIBLE);
+
+        callerIdTabScroll = new android.widget.ScrollView(activity);
+        callerIdTabScroll.addView(callerIdTab);
+        callerIdTabScroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
+        callerIdTabScroll.setVisibility(View.GONE);
+
+        filterTabScroll = new android.widget.ScrollView(activity);
+        filterTabScroll.addView(filterTab);
+        filterTabScroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
+        filterTabScroll.setVisibility(View.GONE);
+
+        setTabContainer = new LinearLayout(activity);
+        setTabContainer.setOrientation(LinearLayout.VERTICAL);
+        setTabContainer.setBackgroundColor(getColorInt("surface"));
+        setTabContainer.setElevation(u.dpToPx(4));
+        setTabContainerParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        setTabContainer.setLayoutParams(setTabContainerParams);
+
+        setTabsWithIndicator = new LinearLayout(activity);
+        setTabsWithIndicator.setOrientation(LinearLayout.VERTICAL);
+        setTabsWithIndicator.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        setTabButtonLayout = new LinearLayout(activity);
+        setTabButtonLayout.setOrientation(LinearLayout.HORIZONTAL);
+        setTabButtonLayout.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        generalTabButton = new TextView(activity);
+        generalTabButton.setText("General");
+        generalTabButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        generalTabButton.setGravity(Gravity.CENTER);
+        generalTabButton.setPadding(u.dpToPx(16), u.dpToPx(12), u.dpToPx(16), u.dpToPx(12));
+        generalTabButton.setTextColor(getColorInt("primary"));
+        generalTabButton.setTypeface(null, Typeface.BOLD);
+        generalTabButton.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+
+        callerIdTabButton = new TextView(activity);
+        callerIdTabButton.setText("Caller ID");
+        callerIdTabButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        callerIdTabButton.setGravity(Gravity.CENTER);
+        callerIdTabButton.setPadding(u.dpToPx(16), u.dpToPx(12), u.dpToPx(16), u.dpToPx(12));
+        callerIdTabButton.setTextColor(getColorInt("on-surface-variant"));
+        callerIdTabButton.setTypeface(null, Typeface.NORMAL);
+        callerIdTabButton.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+
+        filterTabButton = new TextView(activity);
+        filterTabButton.setText("Filter");
+        filterTabButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        filterTabButton.setGravity(Gravity.CENTER);
+        filterTabButton.setPadding(u.dpToPx(16), u.dpToPx(12), u.dpToPx(16), u.dpToPx(12));
+        filterTabButton.setTextColor(getColorInt("on-surface-variant"));
+        filterTabButton.setTypeface(null, Typeface.NORMAL);
+        filterTabButton.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+
+        setTabButtonLayout.addView(generalTabButton);
+        setTabButtonLayout.addView(callerIdTabButton);
+        setTabButtonLayout.addView(filterTabButton);
+
+        setTabIndicator = new View(activity);
+        setTabIndicatorParams = new LinearLayout.LayoutParams(0, u.dpToPx(3));
+        setTabIndicatorParams.weight = 1.0f;
+        setTabIndicator.setLayoutParams(setTabIndicatorParams);
+        setTabIndicatorBg = new GradientDrawable();
+        setTabIndicatorBg.setColor(getColorInt("primary"));
+        setTabIndicatorBg.setCornerRadius(u.dpToPx(3));
+        setTabIndicator.setBackground(setTabIndicatorBg);
+
+        setIndicatorContainer = new LinearLayout(activity);
+        setIndicatorContainer.setOrientation(LinearLayout.HORIZONTAL);
+        setIndicatorContainerParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, u.dpToPx(3));
+        setIndicatorContainer.setLayoutParams(setIndicatorContainerParams);
+        setIndicatorContainer.setPadding(u.dpToPx(16), 0, u.dpToPx(16), 0);
+
+        setSpacer1 = new View(activity);
+        setSpacer1Params = new LinearLayout.LayoutParams(0, u.dpToPx(3));
+        setSpacer1Params.weight = 1.0f;
+        setSpacer1.setLayoutParams(setSpacer1Params);
+
+        setSpacer2 = new View(activity);
+        setSpacer2Params = new LinearLayout.LayoutParams(0, u.dpToPx(3));
+        setSpacer2Params.weight = 1.0f;
+        setSpacer2.setLayoutParams(setSpacer2Params);
+
+        setIndicatorContainer.addView(setTabIndicator);
+        setIndicatorContainer.addView(setSpacer1);
+        setIndicatorContainer.addView(setSpacer2);
+
+        setTabsWithIndicator.addView(setTabButtonLayout);
+        setTabsWithIndicator.addView(setIndicatorContainer);
+        setTabContainer.addView(setTabsWithIndicator);
+
+        switchToTab(tabIndex) {
+            generalTabScroll.setVisibility(tabIndex == 0 ? View.VISIBLE : View.GONE);
+            callerIdTabScroll.setVisibility(tabIndex == 1 ? View.VISIBLE : View.GONE);
+            filterTabScroll.setVisibility(tabIndex == 2 ? View.VISIBLE : View.GONE);
+            
+            setIndicatorContainer.removeAllViews();
+            if (setTabIndicator.getParent() != null) ((android.view.ViewGroup)setTabIndicator.getParent()).removeView(setTabIndicator);
+            if (setSpacer1.getParent() != null) ((android.view.ViewGroup)setSpacer1.getParent()).removeView(setSpacer1);
+            if (setSpacer2.getParent() != null) ((android.view.ViewGroup)setSpacer2.getParent()).removeView(setSpacer2);
+
+            if (tabIndex == 0) {
+                generalTabButton.setTextColor(getColorInt("primary")); generalTabButton.setTypeface(null, Typeface.BOLD);
+                callerIdTabButton.setTextColor(getColorInt("on-surface-variant")); callerIdTabButton.setTypeface(null, Typeface.NORMAL);
+                filterTabButton.setTextColor(getColorInt("on-surface-variant")); filterTabButton.setTypeface(null, Typeface.NORMAL);
+                setIndicatorContainer.addView(setTabIndicator); setIndicatorContainer.addView(setSpacer1); setIndicatorContainer.addView(setSpacer2);
+            } else if (tabIndex == 1) {
+                generalTabButton.setTextColor(getColorInt("on-surface-variant")); generalTabButton.setTypeface(null, Typeface.NORMAL);
+                callerIdTabButton.setTextColor(getColorInt("primary")); callerIdTabButton.setTypeface(null, Typeface.BOLD);
+                filterTabButton.setTextColor(getColorInt("on-surface-variant")); filterTabButton.setTypeface(null, Typeface.NORMAL);
+                setIndicatorContainer.addView(setSpacer1); setIndicatorContainer.addView(setTabIndicator); setIndicatorContainer.addView(setSpacer2);
+            } else if (tabIndex == 2) {
+                generalTabButton.setTextColor(getColorInt("on-surface-variant")); generalTabButton.setTypeface(null, Typeface.NORMAL);
+                callerIdTabButton.setTextColor(getColorInt("on-surface-variant")); callerIdTabButton.setTypeface(null, Typeface.NORMAL);
+                filterTabButton.setTextColor(getColorInt("primary")); filterTabButton.setTypeface(null, Typeface.BOLD);
+                setIndicatorContainer.addView(setSpacer1); setIndicatorContainer.addView(setSpacer2); setIndicatorContainer.addView(setTabIndicator);
+            }
+        }
+
+        generalTabButton.setOnClickListener(new View.OnClickListener() { onClick(View v) { switchToTab(0); } });
+        callerIdTabButton.setOnClickListener(new View.OnClickListener() { onClick(View v) { switchToTab(1); } });
+        filterTabButton.setOnClickListener(new View.OnClickListener() { onClick(View v) { switchToTab(2); } });
+
+        // === GENERAL TAB ===
+        updateCheckbox = createThemedCheckbox(activity, "TC_update_check", false);
+        generalTab.addView(createSettingItem(activity, "Auto-check for updates", updateCheckbox));
+        
+        debugCheckbox = createThemedCheckbox(activity, "TC_debug_enabled", false);
+        generalTab.addView(createSettingItem(activity, "Enable debug logging", debugCheckbox));
+        
+        sdkStr = tasker.getVariable("SDK");
+        sdk = sdkStr != null ? Integer.parseInt(sdkStr) : 30;
+        themeOptions = sdk >= 31 
+            ? new String[]{"Material You", "Auto Dark Light", "Dark", "Light", "Custom Color"}
+            : new String[]{"Auto Dark Light", "Dark", "Light", "Custom Color"};
+        generalTab.addView(createSettingPickerButton(activity, "Theme", "TC_theme", themeOptions, "Auto Dark Light", dialog, onThemeChanged));
+
+        dbPathContainer = new LinearLayout(activity);
+        dbPathContainer.setOrientation(LinearLayout.VERTICAL);
+        dbPathContainer.setPadding(u.dpToPx(16), u.dpToPx(12), u.dpToPx(16), u.dpToPx(12));
+        dbPathContainer.setBackground(createCardBackground(getThemeColor("surface"), 16));
+        dbPathParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        dbPathParams.setMargins(u.dpToPx(8), u.dpToPx(8), u.dpToPx(8), u.dpToPx(8));
+        dbPathContainer.setLayoutParams(dbPathParams);
+        
+        dbLabelContainer = new LinearLayout(activity);
+        dbLabelContainer.setOrientation(LinearLayout.HORIZONTAL);
+        dbLabel = new TextView(activity);
+        dbLabel.setText("Database Path:");
+        dbLabel.setTextColor(getColorInt("on-surface"));
+        dbLabel.setTextSize(16);
+        dbLabelParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        dbLabel.setLayoutParams(dbLabelParams);
+        
+        changePathBtn = createThemedSettingsButton(activity, "Change Path");
+        changePathBtn.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                /* Run on a background thread so blockingGet() doesn't freeze the UI */
+                new Thread(new Runnable() {
+                    run() {
+                        try {
+                            intent = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT_TREE);
+                            resultIntent = tasker.getWithActivityForResult(intent).blockingGet();
+                            
+                            if (resultIntent != null && resultIntent.getData() != null) {
+                                uri = resultIntent.getData();
+                                realDir = tasker.convertToRealFilePath(uri);
+                                
+                                if (realDir == null || realDir.isEmpty()) {
+                                    tasker.showToast("Could not resolve real path. Try selecting a standard internal folder.");
+                                    return;
+                                }
+                                
+                                oldPath = tasker.getVariable("TC_dbpath");
+                                newPath = realDir + "/Truecaller.db";
+                                
+                                if (oldPath != null && !oldPath.equals(newPath)) {
+                                    oldFile = new java.io.File(oldPath);
+                                    if (oldFile.exists()) {
+                                        in = new java.io.FileInputStream(oldFile);
+                                        out = new java.io.FileOutputStream(newPath);
+                                        buf = new byte[1024];
+                                        len = 0;
+                                        while ((len = in.read(buf)) > 0) {
+                                            out.write(buf, 0, len);
+                                        }
+                                        in.close();
+                                        out.close();
+                                        oldFile.delete();
+                                    }
+                                }
+                                
+                                tasker.setVariable("TC_dbpath", newPath);
+                                tasker.showToast("Database path updated successfully");
+                                
+                                /* Update the UI element safely on the main thread */
+                                mainHandler.post(new Runnable() {
+                                    run() {
+                                        d.reloadDb();
+                                        if (dbPathText != null) {
+                                            dbPathText.setText(newPath);
+                                        }
+                                        /* This forces the underlying call log list to rebuild and fetch fresh data */
+                                        if (onThemeChanged != null) {
+                                            onThemeChanged.run();
+                                        }
+                                    }
+                                });
+                            }
+                        } catch (Exception e) {
+                            tasker.showToast("Error moving DB: " + e.getMessage());
+                        }
+                    }
+                }).start();
+            }
+        });
+        dbLabelContainer.addView(dbLabel);
+        dbLabelContainer.addView(changePathBtn);
+        
+        dbPathText = new android.widget.EditText(activity);
+        dbPathText.setText(tasker.getVariable("TC_dbpath"));
+        dbPathText.setEnabled(false);
+        dbPathText.setTextColor(getColorInt("on-surface-variant"));
+        dbPathText.setPadding(u.dpToPx(8), u.dpToPx(8), u.dpToPx(8), u.dpToPx(8));
+        dbPathText.setBackgroundColor(getColorInt("surface-variant"));
+        dbTextParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        dbTextParams.topMargin = u.dpToPx(12);
+        dbPathText.setLayoutParams(dbTextParams);
+        
+        dbPathContainer.addView(dbLabelContainer);
+        dbPathContainer.addView(dbPathText);
+        generalTab.addView(dbPathContainer);
+        
+        actionsContainer = new LinearLayout(activity);
+        actionsContainer.setOrientation(LinearLayout.VERTICAL);
+        actionsContainer.setPadding(u.dpToPx(16), u.dpToPx(12), u.dpToPx(16), u.dpToPx(12));
+        actionsContainer.setBackground(createCardBackground(getThemeColor("surface"), 16));
+        actionsParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        actionsParams.setMargins(u.dpToPx(8), u.dpToPx(8), u.dpToPx(8), u.dpToPx(8));
+        actionsContainer.setLayoutParams(actionsParams);
+        
+        updatesBtn = createThemedSettingsButton(activity, "Check for updates");
+        updatesBtn.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        updatesBtn.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                tasker.callTask("Truecaller - Update Database", new java.util.HashMap());
+            }
+        });
+        actionsContainer.addView(updatesBtn);
+        
+        permissionsBtn = createThemedSettingsButton(activity, "Check permissions");
+        btnMargins = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        btnMargins.setMargins(0, u.dpToPx(8), 0, 0);
+        permissionsBtn.setLayoutParams(btnMargins);
+        permissionsBtn.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                taskVars = new java.util.HashMap();
+                taskVars.put("par1", "Check Permissions");
+                tasker.callTask("Truecaller - Settings", taskVars);
+            }
+        });
+        actionsContainer.addView(permissionsBtn);
+        
+        nameBtn = createThemedSettingsButton(activity, "Update Name");
+        btnMargins2 = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        btnMargins2.setMargins(0, u.dpToPx(8), 0, 0);
+        nameBtn.setLayoutParams(btnMargins2);
+        nameBtn.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                taskVars = new java.util.HashMap();
+                taskVars.put("par1", "Update Name");
+                tasker.callTask("Truecaller - Settings", taskVars);
+                dialog.dismiss();
+            }
+        });
+        actionsContainer.addView(nameBtn);
+        
+        resetBtn = createThemedSettingsButton(activity, "Reset");
+        btnMargins3 = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        btnMargins3.setMargins(0, u.dpToPx(8), 0, 0);
+        resetBtn.setLayoutParams(btnMargins3);
+        resetBtn.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                confirmAction = new Runnable() {
+                    run() {
+                        taskVars = new java.util.HashMap();
+                        taskVars.put("par1", "Reset");
+                        tasker.callTask("Truecaller - Settings", taskVars);
+                        dialog.dismiss();
+                    }
+                };
+                showConfirmDialog(activity, "Confirmation", "Reset Settings?", "Yes", confirmAction);
+            }
+        });
+        actionsContainer.addView(resetBtn);
+        
+        deleteIdBtn = createThemedSettingsButton(activity, "Delete installationid");
+        btnMargins4 = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        btnMargins4.setMargins(0, u.dpToPx(8), 0, 0);
+        deleteIdBtn.setLayoutParams(btnMargins4);
+        deleteIdBtn.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                confirmAction = new Runnable() {
+                    run() {
+                        taskVars = new java.util.HashMap();
+                        taskVars.put("par1", "Delete Truecaller installationId");
+                        tasker.callTask("Truecaller - Settings", taskVars);
+                        dialog.dismiss();
+                    }
+                };
+                showConfirmDialog(activity, "Confirmation", "Delete InstallationId?", "Yes", confirmAction);
+            }
+        });
+        actionsContainer.addView(deleteIdBtn);
+        
+        deleteAccountBtn = createThemedSettingsButton(activity, "Delete Account");
+        btnMargins5 = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        btnMargins5.setMargins(0, u.dpToPx(8), 0, 0);
+        deleteAccountBtn.setLayoutParams(btnMargins5);
+        deleteAccountBtn.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                confirmAction = new Runnable() {
+                    run() {
+                        taskVars = new java.util.HashMap();
+                        taskVars.put("par1", "Delete Truecaller Account");
+                        tasker.callTask("Truecaller - Settings", taskVars);
+                        dialog.dismiss();
+                    }
+                };
+                showConfirmDialog(activity, "Confirmation", "Delete Account?", "Yes", confirmAction);
+            }
+        });
+        actionsContainer.addView(deleteAccountBtn);
+        generalTab.addView(actionsContainer);
+        
+        // === CALLER ID TAB ===
+        callerIdTab.addView(createSettingItem(activity, "Enable Caller ID", createThemedCheckbox(activity, "TC_enable_caller_id", false)));
+        callerIdDisplayOptions = new String[]{"Notification", "Overlay"};
+        callerIdTab.addView(createSettingPickerButton(activity, "Display Type", "TC_caller_id_display_type", callerIdDisplayOptions, "Notification", dialog, null));
+        callerIdTab.addView(createSettingItem(activity, "Enable For Device Contacts", createThemedCheckbox(activity, "TC_enable_device_contacts", false)));
+        callerIdTab.addView(createSettingItem(activity, "Enable For Outgoing Calls", createThemedCheckbox(activity, "TC_enable_for_outgoing_calls", false)));
+        callerIdTab.addView(createSettingItem(activity, "Missed Call Notification", createThemedCheckbox(activity, "TC_missed_call_notification", false)));
+        callerIdTab.addView(createSettingItem(activity, "Caller ID for SMS", createThemedCheckbox(activity, "TC_enable_for_sms", false)));
+        callerIdTab.addView(createSettingItem(activity, "WhatsApp Calls", createThemedCheckbox(activity, "TC_enable_for_whatsapp_calls", false)));
+        callerIdTab.addView(createSettingItem(activity, "WhatsApp Messages", createThemedCheckbox(activity, "TC_enable_for_whatsapp_msgs", false)));
+        callerIdTab.addView(createSettingItem(activity, "Monitor Clipboard", createThemedCheckbox(activity, "TC_monitor_clipboard", false)));
+        callerIdTab.addView(createSettingItem(activity, "Enable Share Trigger", createThemedCheckbox(activity, "TC_share_trigger", false)));
+        
+        // === FILTER TAB ===
+        blockMethodOptions = new String[]{"Reject", "Silent", "Pick & hang"};
+        filterTab.addView(createSettingPickerButton(activity, "Call Block Method", "TC_call_block_method", blockMethodOptions, "Reject", dialog, null));
+      
+        filterTab.addView(createSettingItemWithDescription(
+            activity,
+            "Block All Calls",
+            "Blocks every incoming call regardless of number.",
+            createThemedCheckbox(activity, "TC_block_all_calls", false)
+        ));
+      
+        filterTab.addView(createSettingItemWithDescription(
+            activity,
+            "Block Unsaved Numbers",
+            "Blocks calls from numbers not saved in your contacts.",
+            createThemedCheckbox(activity, "TC_block_unsaved_numbers", false)
+        ));
+      
+        filterTab.addView(createSettingItemWithDescription(
+            activity,
+            "Block Top Spam Calls",
+            "Blocks numbers flagged as Top Spammer.",
+            createThemedCheckbox(activity, "TC_spam_calls_block_top_spammers", false)
+        ));
+      
+        filterTab.addView(createSettingItemWithDescription(
+            activity,
+            "Block Additional Spam Calls",
+            "Blocks numbers flagged as Spammer.",
+            createThemedCheckbox(activity, "TC_spam_calls_block_additional", false)
+        ));
+      
+        filterTab.addView(createSettingItemWithDescription(
+            activity,
+            "Early Spam Calls Detection",
+            "Blocks numbers flagged as Likely Sales, Likely Spam, Telemarketer, Potential Fraud.",
+            createThemedCheckbox(activity, "TC_spam_calls_early_detection", false)
+        ));
+      
+        filterTab.addView(createSettingItemWithDescription(
+            activity,
+            "Block Private Calls",
+            "Blocks calls from hidden/private numbers.",
+            createThemedCheckbox(activity, "TC_private_calls_block", false)
+        ));
+        
+        /* User filters button */
+        userFiltersContainer = new LinearLayout(activity);
+        userFiltersContainer.setOrientation(LinearLayout.HORIZONTAL);
+        userFiltersContainer.setGravity(Gravity.CENTER_VERTICAL);
+        userFiltersContainer.setWeightSum(1.0f);
+        userFiltersContainer.setPadding(u.dpToPx(16), u.dpToPx(12), u.dpToPx(16), u.dpToPx(12));
+        userFiltersContainer.setBackground(createCardBackground(getColorString("surface"), 16));
+        userFiltersParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        userFiltersParams.setMargins(u.dpToPx(8), u.dpToPx(8), u.dpToPx(8), u.dpToPx(8));
+        userFiltersContainer.setLayoutParams(userFiltersParams);
+        
+        userFiltersCheckbox = createThemedCheckbox(activity, "TC_user_filters", false);
+        
+        userFiltersBtn = createThemedSettingsButton(activity, "User Filters");
+        userFiltersBtn.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) {
+                showUserFiltersDialog(activity, null, null, null, null);
+            }
+        });
+        userFiltersBtnParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        userFiltersBtn.setLayoutParams(userFiltersBtnParams);
+        
+        /* Add spacer to push checkbox to the right */
+        spacerView = new View(activity);
+        spacerParams = new LinearLayout.LayoutParams(
+            0,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            1.0f
+        );
+        spacerView.setLayoutParams(spacerParams);
+        
+        userFiltersContainer.addView(userFiltersBtn);
+        userFiltersContainer.addView(spacerView);
+        userFiltersContainer.addView(userFiltersCheckbox);
+      
+        /* Toggle checkbox when clicking anywhere on the row */
+        userFiltersContainer.setOnClickListener(new View.OnClickListener() {
+          onClick(View v) {
+              userFiltersCheckbox.setChecked(!userFiltersCheckbox.isChecked());
+          }
+        });
+      
+        filterTab.addView(userFiltersContainer);
+        
+        /* Assemble main layout */
+        mainLayout.addView(setTabContainer);
+        mainLayout.addView(generalTabScroll);
+        mainLayout.addView(callerIdTabScroll);
+        mainLayout.addView(filterTabScroll);
+        
+        dialog.setOnDismissListener(new android.content.DialogInterface.OnDismissListener() {
+            onDismiss(android.content.DialogInterface dAlert) {
+                if (onSettingsClosed != null) {
+                    onSettingsClosed.run();
+                }
+            }
+        });
+        
+        //return mainLayout;
+        dialog.setContentView(mainLayout);
+        dialog.show();
+        return dialog;
+    }
+    
+    reloadColors();
+    return this;
+}

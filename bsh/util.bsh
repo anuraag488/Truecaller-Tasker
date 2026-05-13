@@ -1,0 +1,211 @@
+import android.content.Intent;
+import android.net.Uri;
+import android.telephony.PhoneNumberUtils;
+import android.util.TypedValue;
+import java.util.ArrayList;
+
+util() {
+    logToFile(message) {
+        if (!debugEnabled) return;
+        try {
+            tasker.log(message, logFile);
+        } catch(Exception e) {
+            tasker.log("File log error: " + e.getMessage());
+        }
+    }
+    
+    isValidString(str) {
+        return str != null && !str.equals("<null>") && !str.trim().isEmpty();
+    }
+    
+    closeQuietly(obj) {
+        if (obj != null) {
+            try { obj.close(); } catch(Exception e) {}
+        }
+    }
+    
+    getCountryIso() {
+        try {
+            tm = context.getSystemService(context.TELEPHONY_SERVICE);
+            if (tm != null) {
+                countryIso = tm.getSimCountryIso();
+                if (countryIso == null || countryIso.isEmpty()) {
+                    countryIso = tm.getNetworkCountryIso();
+                }
+                if (countryIso != null && !countryIso.isEmpty()) {
+                    return countryIso.toUpperCase();
+                }
+            }
+        } catch (Exception e) {
+            logToFile("error while trying to get countryIso: " + e.getMessage());
+        }
+        return "IN";
+    }
+
+    convertToE164(number) {
+        try {
+            countryIso = getCountryIso();
+            e164 = PhoneNumberUtils.formatNumberToE164(number, countryIso);
+            return e164 != null ? e164 : number;
+        } catch (Exception e) {
+            return number;
+        }
+    }
+    
+    dpToPx(dp) {
+        return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, context.getResources().getDisplayMetrics()));
+    }
+    
+    formatRelativeTime(timestamp) {
+        timeAgo = System.currentTimeMillis() - timestamp;
+        if (timeAgo < 60000) return (timeAgo / 1000) + "s ago";
+        if (timeAgo < 3600000) return (timeAgo / 60000) + "m ago";
+        if (timeAgo < 86400000) return (timeAgo / 3600000) + "h ago";
+        return (timeAgo / 86400000) + "d ago";
+    }
+
+    formatDuration(duration) {
+        if (duration <= 0) return "";
+        if (duration < 60) return " • " + duration + "s";
+        return " • " + (duration / 60) + "m " + (duration % 60) + "s";
+    }
+
+    parseAddress(addr) {
+        addressParts = new ArrayList();
+        try {
+            if (addr.has("street")) { street = addr.getString("street"); if (isValidString(street)) addressParts.add(street); }
+            if (addr.has("area")) { area = addr.getString("area"); if (isValidString(area)) addressParts.add(area); }
+            if (addr.has("city")) { city = addr.getString("city"); if (isValidString(city)) addressParts.add(city); }
+            if (addr.has("zipCode")) { zipCode = addr.getString("zipCode"); if (isValidString(zipCode)) addressParts.add(zipCode); }
+            if (addr.has("countryCode")) { addrCountry = addr.getString("countryCode"); if (isValidString(addrCountry)) addressParts.add(addrCountry); }
+            if (addressParts.size() > 0) {
+                sb = new StringBuffer();
+                for (int i = 0; i < addressParts.size(); i++) {
+                    if (i > 0) sb.append(", ");
+                    sb.append(addressParts.get(i));
+                }
+                return sb.toString();
+            }
+        } catch(Exception e) {}
+        return null;
+    }
+
+    extractPhoneInfo(dataObj) {
+        list = new ArrayList();
+        try {
+            if (dataObj.has("phones")) {
+                phones = dataObj.getJSONArray("phones");
+                if (phones.length() > 0) {
+                    phone = phones.getJSONObject(0);
+                    if (phone.has("carrier")) { carrier = phone.getString("carrier"); if (isValidString(carrier) && !carrier.equals("null")) list.add(carrier); }
+                    if (phone.has("countryCode")) { cc = phone.getString("countryCode"); if (isValidString(cc) && !cc.equals("null")) list.add(cc); }
+                    if (phone.has("dialingCode")) { dc = phone.getString("dialingCode"); if (isValidString(dc) && !dc.equals("null")) list.add(dc); }
+                }
+            }
+        } catch (Exception e) {}
+        return list;
+    }
+    
+    makeCall(number) {
+        try {
+            intent = new Intent(Intent.ACTION_CALL);
+            intent.setData(Uri.parse("tel:" + number));
+            packageManager = context.getPackageManager();
+            resolveInfoList = packageManager.queryIntentActivities(intent, 0);
+            if (resolveInfoList != null && resolveInfoList.size() > 0) {
+                intent.setPackage(resolveInfoList.get(0).activityInfo.packageName);
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+        } catch(Exception e) {
+            logToFile("Cannot open dialer: " + e.getMessage());
+            tasker.showToast("Cannot open dialer: " + e.getMessage());
+        }
+    }
+
+    sendSms(number) {
+        try {
+            intent = new Intent(Intent.ACTION_SENDTO);
+            intent.setData(Uri.parse("smsto:" + number));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+        } catch(Exception e) {
+            logToFile("Cannot open SMS: " + e.getMessage());
+            tasker.showToast("Cannot open SMS: " + e.getMessage());
+        }
+    }
+
+    initDefaults() {
+        void checkAndSet(varName, defaultVal) {
+            val = tasker.getVariable(varName);
+            if (!isValidString(val)) {
+                tasker.setVariable(varName, defaultVal);
+            }
+        }
+
+        void checkAndSetBool(varName, defaultVal) {
+            val = tasker.getVariable(varName);
+            if (!"true".equals(val) && !"false".equals(val)) {
+                tasker.setVariable(varName, defaultVal);
+            }
+        }
+
+        /* 1. String defaults */
+        checkAndSet("TC_caller_id_display_type", "Overlay");
+        checkAndSet("TC_theme", "Auto Dark Light");
+        checkAndSet("TC_call_block_method", "Reject");
+
+        /* 2. Boolean 'true' defaults */
+        String[] trueVars = new String[]{
+            "TC_update_check", "TC_enable_caller_id", "TC_enable_device_contacts",
+            "TC_enable_for_outgoing_calls", "TC_missed_call_notification",
+            "TC_share_trigger", "TC_user_filters"
+        };
+        for (int i = 0; i < trueVars.length; i++) {
+            checkAndSetBool(trueVars[i], "true");
+        }
+
+        /* 3. Boolean 'false' defaults */
+        String[] falseVars = new String[]{
+            "TC_monitor_clipboard", "TC_enable_for_sms", "TC_enable_for_whatsapp_calls",
+            "TC_enable_for_whatsapp_msgs", "TC_block_all_calls", "TC_block_unsaved_numbers",
+            "TC_spam_calls_block_top_spammers", "TC_spam_calls_block_additional",
+            "TC_spam_calls_early_detection", "TC_private_calls_block", "TC_debug_enabled"
+        };
+        for (int i = 0; i < falseVars.length; i++) {
+            checkAndSetBool(falseVars[i], "false");
+        }
+
+        /* 4. Path defaults & App Factory Support */
+        pkgName = context.getPackageName();
+        isTasker = (pkgName != null && pkgName.equals("net.dinglisch.android.taskerm"));
+        
+        //needs to setup TC_dir from tasker task actions
+        /*tcDir = tasker.getVariable("TC_dir");
+        if (!isValidString(tcDir)) {
+            if (!isTasker) {
+                tcDir = context.getFilesDir().getAbsolutePath();
+            } else {
+                tcDir = "/storage/emulated/0/Tasker/truecaller";
+            }
+            tasker.setVariable("TC_dir", tcDir);
+        }*/
+
+        dbPath = tasker.getVariable("TC_dbpath");
+        if (!isValidString(dbPath)) {
+            if (!isTasker) {
+                dbPath = context.getDatabasePath("Truecaller.db").getAbsolutePath();
+            } else {
+                dbPath = tasker.getVariable("TC_dir") + "/database/Truecaller.db";
+            }
+            tasker.setVariable("TC_dbpath", dbPath);
+        }
+    }
+
+    /* Auto-run initialization and reload debug variable in case it was just set */
+    initDefaults();
+    debugEnabled = "true".equals(tasker.getVariable("TC_debug_enabled"));
+    logFile = tasker.getVariable("TC_dir") + "/log/truecaller_debug.log";
+
+    return this;
+}

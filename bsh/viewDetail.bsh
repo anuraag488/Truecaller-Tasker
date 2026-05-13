@@ -1,0 +1,714 @@
+import android.app.Dialog;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.database.sqlite.SQLiteDatabase;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
+import android.provider.ContactsContract;
+import android.text.TextUtils;
+import android.util.DisplayMetrics;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.KeyEvent;
+import android.view.View;
+import android.view.WindowManager;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.util.ArrayList;
+import java.util.HashMap;
+
+viewDetail(ui) {
+    u = util();
+    d = data();
+    isStandalone = false;
+    isCallLog = false;
+    onDeleted = null;
+    onClose = null;
+    
+    detailOverlay = null;
+    currentAppTask = null;
+    rootContainer = null;
+
+    warningDataCsv = tasker.getVariable("warning_data");
+    warningMap = d.getWarningMap(warningDataCsv);
+    
+    deleteFromCallLog(number) {
+        try {
+            e164Number = u.convertToE164(number);
+            callLogUri = android.net.Uri.parse("content://call_log/calls");
+            selection = "number = ? OR normalized_number = ?";
+            selectionArgs = new String[]{number, e164Number};
+            context.getContentResolver().delete(callLogUri, selection, selectionArgs);
+            tasker.showToast("Deleted from call log");
+        } catch(Exception e) {
+            tasker.showToast("Delete failed: " + e.getMessage());
+        }
+    }
+    
+    deleteFromDatabase(number) {
+        db = null;
+        try {
+            e164Number = u.convertToE164(number);
+            db = d.getWritableDb();
+            db.beginTransaction();
+            try {
+                db.execSQL("DELETE FROM data WHERE number_e164 = ?", new String[]{e164Number});
+                db.execSQL("DELETE FROM number_map WHERE number_e164 = ?", new String[]{e164Number});
+                db.setTransactionSuccessful();
+                tasker.showToast("Deleted from database");
+            } finally {
+                db.endTransaction();
+            }
+        } catch(Exception e) {
+            tasker.showToast("Delete failed: " + e.getMessage());
+        } finally {
+            u.closeQuietly(db);
+        }
+    }
+    
+    deleteEverything(number) {
+        deleteFromCallLog(number);
+        deleteFromDatabase(number);
+    }
+
+    showInputDialog(activity, title, currentValue, isMultiline, number, isNote) {
+        dialog = new android.app.Dialog(activity);
+        dialog.requestWindowFeature(1);
+        dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+        dialogLayout = new LinearLayout(activity);
+        dialogLayout.setOrientation(LinearLayout.VERTICAL);
+        dialogLayout.setPadding(u.dpToPx(24), u.dpToPx(24), u.dpToPx(24), u.dpToPx(16));
+        dialogBg = ui.createCardBackground(ui.getThemeColor("surface"), 16);
+        dialogLayout.setBackground(dialogBg);
+        
+        titleText = new TextView(activity);
+        titleText.setText(title);
+        titleText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+        titleText.setTypeface(null, Typeface.BOLD);
+        titleText.setTextColor(ui.getColorInt("on-surface"));
+        dialogLayout.addView(titleText);
+        
+        editText = new EditText(activity);
+        editText.setText(currentValue != null ? currentValue : "");
+        if (currentValue != null) editText.setSelection(currentValue.length());
+        if (isMultiline) {
+            editText.setHint("Enter note...");
+            editText.setGravity(Gravity.TOP | Gravity.LEFT);
+            editText.setMinLines(3);
+            editText.setMaxLines(6);
+        }
+        editText.setHintTextColor(ui.getColorInt("on-surface-variant"));
+        editText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        editText.setTextColor(ui.getColorInt("on-surface"));
+        inputBg = ui.createCardBackground(ui.getThemeColor("surface-variant"), 8);
+        editText.setBackground(inputBg);
+        editText.setPadding(u.dpToPx(16), u.dpToPx(12), u.dpToPx(16), u.dpToPx(12));
+        inputParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        inputParams.topMargin = u.dpToPx(16);
+        inputParams.bottomMargin = u.dpToPx(24);
+        editText.setLayoutParams(inputParams);
+        dialogLayout.addView(editText);
+        
+        buttonContainer = new LinearLayout(activity);
+        buttonContainer.setOrientation(LinearLayout.HORIZONTAL);
+        buttonContainer.setGravity(Gravity.END);
+        
+        cancelBtn = new TextView(activity);
+        cancelBtn.setText("CANCEL");
+        cancelBtn.setTextColor(ui.getColorInt("primary"));
+        cancelBtn.setTypeface(null, Typeface.BOLD);
+        cancelBtn.setPadding(u.dpToPx(12), u.dpToPx(8), u.dpToPx(12), u.dpToPx(8));
+        cancelBtn.setOnClickListener(new View.OnClickListener() {
+            onClick(v) {
+                dialog.dismiss();
+            }
+        });
+        buttonContainer.addView(cancelBtn);
+        
+        saveBtn = new TextView(activity);
+        saveBtn.setText("SAVE");
+        saveBtn.setTextColor(ui.getColorInt("primary"));
+        saveBtn.setTypeface(null, Typeface.BOLD);
+        saveBtn.setPadding(u.dpToPx(12), u.dpToPx(8), u.dpToPx(12), u.dpToPx(8));
+        finalIsNote = isNote;
+        saveBtn.setOnClickListener(new View.OnClickListener() {
+            onClick(v) {
+                newValue = editText.getText().toString().trim();
+                db = null;
+                cursor = null;
+                try {
+                    e164Number = u.convertToE164(number);
+                    db = d.getWritableDb();
+                    if (finalIsNote) {
+                        if (newValue.isEmpty()) {
+                            db.execSQL("UPDATE data SET note = NULL WHERE number_e164 = ?", new String[]{e164Number});
+                        } else {
+                            db.execSQL("UPDATE data SET note = ? WHERE number_e164 = ?", new String[]{newValue, e164Number});
+                        }
+                        tasker.showToast("Note updated");
+                    } else {
+                        cursor = db.rawQuery("SELECT json FROM data WHERE number_e164 = ?", new String[]{e164Number});
+                        jsonName = null;
+                        if (cursor.moveToFirst()) {
+                            jsonString = cursor.getString(0);
+                            if (u.isValidString(jsonString)) {
+                                try {
+                                    json = new JSONObject(jsonString);
+                                    dataArray = json.getJSONArray("data");
+                                    if (dataArray.length() > 0) {
+                                        dataObj = dataArray.getJSONObject(0);
+                                        if (dataObj.has("name")) {
+                                            jsonName = dataObj.getString("name");
+                                        }
+                                    }
+                                } catch(Exception e) {}
+                            }
+                        }
+                        if (newValue.isEmpty()) {
+                            if (jsonName != null) {
+                                db.execSQL("UPDATE data SET name = ?, name_modified = 0 WHERE number_e164 = ?", new String[]{jsonName, e164Number});
+                                tasker.showToast("Name reset to original");
+                            } else {
+                                tasker.showToast("No original name to reset");
+                            }
+                        } else if (jsonName != null && newValue.equals(jsonName)) {
+                            db.execSQL("UPDATE data SET name = ?, name_modified = 0 WHERE number_e164 = ?", new String[]{newValue, e164Number});
+                            tasker.showToast("Name updated");
+                        } else {
+                            db.execSQL("UPDATE data SET name = ?, name_modified = 1 WHERE number_e164 = ?", new String[]{newValue, e164Number});
+                            tasker.showToast("Name updated");
+                        }
+                    }
+                    refreshDetailView(activity, number);
+                    dialog.dismiss();
+                } catch(Exception e) {
+                    tasker.showToast("Failed to update: " + e.getMessage());
+                } finally {
+                    u.closeQuietly(cursor);
+                    u.closeQuietly(db);
+                }
+            }
+        });
+        buttonContainer.addView(saveBtn);
+        dialogLayout.addView(buttonContainer);
+        dialog.setContentView(dialogLayout);
+        windowParams = dialog.getWindow().getAttributes();
+        displayMetrics = activity.getResources().getDisplayMetrics();
+        windowParams.width = Math.round(displayMetrics.widthPixels * 0.9f);
+        dialog.getWindow().setAttributes(windowParams);
+        dialog.show();
+    }
+
+    fetchAndUpdate(number, activity) {
+        ui.executorService.submit(new Runnable() {
+            run() {
+                try {
+                    d.fetchFromTruecaller(number);
+                    ui.mainHandler.post(new Runnable() {
+                        run() {
+                            if (!activity.isFinishing() && !activity.isDestroyed()) {
+                                refreshDetailView(activity, number);
+                                tasker.showToast("Data updated");
+                            }
+                        }
+                    });
+                } catch (Exception error) {
+                    u.logToFile("Failed to fetch fresh data: " + error.getMessage());
+                    tasker.showToast(error.getMessage());
+                }
+            }
+        });
+    }
+
+    refreshDetailView(activity, number) {
+        if (detailOverlay != null && detailOverlay.getParent() != null) {
+            parent = detailOverlay.getParent();
+            parent.removeView(detailOverlay);
+        }
+        detailView = createDetailView(activity, number);
+        rootContainer.addView(detailView);
+    }
+
+    populateDetailView(activity, contentLayout, number, details, csName, blockReason) {
+        name = number;
+        jsonString = null;
+        spamScore = 0;
+        isVerified = false;
+        image = null;
+        note = null;
+        dataObj = null;
+        if (details != null) {
+            name = details[0];
+            jsonString = details[1];
+            spamScore = details[2];
+            isVerified = details[3];
+            image = details[4];
+            note = details[5];
+            if (u.isValidString(jsonString)) {
+                try {
+                    json = new JSONObject(jsonString);
+                    dataArray = json.getJSONArray("data");
+                    if (dataArray.length() > 0) {
+                        dataObj = dataArray.getJSONObject(0);
+                    }
+                } catch(Exception e) {
+                    u.logToFile("Error parsing JSON: " + e.getMessage());
+                }
+            }
+        }
+
+        avatarView = new ImageView(activity);
+        avatarSize = u.dpToPx(96);
+        avatarParams = new LinearLayout.LayoutParams(avatarSize, avatarSize);
+        avatarParams.gravity = Gravity.CENTER_HORIZONTAL;
+        avatarParams.bottomMargin = u.dpToPx(16);
+        avatarView.setLayoutParams(avatarParams);
+        avatarView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        ui.loadImageAsync(image, avatarView, name, 96);
+        contentLayout.addView(avatarView);
+
+        nameText = new TextView(activity);
+        nameText.setText(name);
+        nameText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
+        nameText.setTypeface(null, Typeface.BOLD);
+        nameText.setTextColor(ui.getColorInt("on-surface"));
+        nameText.setGravity(Gravity.CENTER);
+        nameText.setClickable(true);
+        nameText.setOnClickListener(new View.OnClickListener() {
+            onClick(v) {
+                showInputDialog(activity, "Edit Name", name, false, number, false);
+            }
+        });
+        contentLayout.addView(nameText);
+
+        if (csName != null) {
+            csNameText = new TextView(activity);
+            csNameText.setText(csName);
+            csNameText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+            csNameText.setTypeface(null, Typeface.BOLD);
+            csNameText.setTextColor(ui.getColorInt("on-surface"));
+            csNameText.setGravity(Gravity.CENTER);
+            contentLayout.addView(csNameText);
+        }
+
+        numberPartsLayout = new LinearLayout(activity);
+        numberPartsLayout.setOrientation(LinearLayout.HORIZONTAL);
+        numberPartsLayout.setLayoutParams(new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
+        numberPartsLayout.setGravity(Gravity.CENTER);
+        numberPartsLayoutParams = numberPartsLayout.getLayoutParams();
+        numberPartsLayoutParams.topMargin = u.dpToPx(8);
+        numberPartsLayoutParams.bottomMargin = u.dpToPx(8);
+        
+        numberPartsList = new ArrayList();
+        numberPartsList.add(number);
+        if (dataObj != null) {
+            numberPartsList.addAll(u.extractPhoneInfo(dataObj));
+        }
+        numberPartsText = new TextView(activity);
+        sb = new StringBuffer();
+        for (int i = 0; i < numberPartsList.size(); i++) {
+            if (i > 0) sb.append(" • ");
+            sb.append(numberPartsList.get(i));
+        }
+        numberPartsText.setText(sb.toString());
+        numberPartsText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        numberPartsText.setTextColor(ui.getColorInt("on-surface-variant"));
+        numberPartsText.setGravity(Gravity.CENTER);
+        numberPartsLayout.addView(numberPartsText);
+        numberPartsText.setOnLongClickListener(new View.OnLongClickListener() {
+            onLongClick(v) {
+                ui.setClip(number);
+                return true;
+            }
+        });
+        contentLayout.addView(numberPartsLayout);
+
+        badgesContainer = ui.createBadgesContainer(activity, isVerified, spamScore, dataObj, warningMap);
+        if (badgesContainer != null) {
+            contentLayout.addView(badgesContainer);
+        }
+
+        if (blockReason != null) {
+            contentLayout.addView(ui.createInfoCard(activity, "BLOCKED", blockReason, "mw_content_block", "#FFEBEE", "#D32F2F"));
+        }
+
+        noteDisplayText = u.isValidString(note) ? note : "Tap to add note...";
+        noteCard = ui.createInfoCard(activity, "Note", noteDisplayText, "mw_av_note", "#FFF8E1", "#F57F17");
+        noteCard.setClickable(true);
+        noteCard.setOnClickListener(new View.OnClickListener() {
+            onClick(v) {
+                showInputDialog(activity, "Edit Note", note, true, number, true);
+            }
+        });
+        contentLayout.addView(noteCard);
+
+        lastCallData = d.getLastCall(number);
+        if (lastCallData != null) {
+            callType = ((Integer) lastCallData[0]).intValue();
+            callDate = ((Long) lastCallData[1]).longValue();
+            callDuration = ((Integer) lastCallData[2]).intValue();
+            callTypeStr = "Call";
+            if (callType == 1) callTypeStr = "Incoming";
+            else if (callType == 2) callTypeStr = "Outgoing";
+            else if (callType == 3) callTypeStr = "Missed";
+            else if (callType == 5) callTypeStr = "Rejected";
+            else if (callType == 6) callTypeStr = "Blocked";
+            timeAgoStr = u.formatRelativeTime(callDate);
+            durationStr = u.formatDuration(callDuration);
+            contentLayout.addView(ui.createInfoCard(activity, "Last Call", callTypeStr + " • " + timeAgoStr + durationStr, "mw_image_timelapse", "#F3E5F5", "#7B1FA2"));
+        }
+
+        if (dataObj != null) {
+            try {
+                if (dataObj.has("about")) {
+                    about = dataObj.getString("about");
+                    if (u.isValidString(about)) {
+                        contentLayout.addView(ui.createInfoCard(activity, "About", about, "mw_action_info", ui.getThemeColor("surface-variant"), ui.getThemeColor("on-surface")));
+                    }
+                }
+                if (dataObj.has("addresses")) {
+                    addresses = dataObj.getJSONArray("addresses");
+                    if (addresses.length() > 0) {
+                        addrStr = u.parseAddress(addresses.getJSONObject(0));
+                        if (addrStr != null) {
+                            contentLayout.addView(ui.createInfoCard(activity, "Address", addrStr, "mw_communication_location_on", ui.getThemeColor("surface-variant"), ui.getThemeColor("on-surface")));
+                        }
+                    }
+                }
+                if (dataObj.has("gender")) {
+                    gender = dataObj.getString("gender");
+                    if (u.isValidString(gender) && !gender.equals("UNKNOWN")) {
+                        contentLayout.addView(ui.createInfoCard(activity, "Gender", gender, "mw_notification_wc", ui.getThemeColor("surface-variant"), ui.getThemeColor("on-surface")));
+                    }
+                }
+                if (dataObj.has("birthday")) {
+                    birthday = dataObj.getString("birthday");
+                    if (u.isValidString(birthday)) {
+                        contentLayout.addView(ui.createInfoCard(activity, "Birthday", birthday, "mw_social_cake", ui.getThemeColor("surface-variant"), ui.getThemeColor("on-surface")));
+                    }
+                }
+                if (dataObj.has("jobTitle")) {
+                    jobTitle = dataObj.getString("jobTitle");
+                    if (u.isValidString(jobTitle)) {
+                        contentLayout.addView(ui.createInfoCard(activity, "Job Title", jobTitle, "mw_places_business_center", ui.getThemeColor("surface-variant"), ui.getThemeColor("on-surface")));
+                    }
+                }
+                if (dataObj.has("companyName")) {
+                    companyName = dataObj.getString("companyName");
+                    if (u.isValidString(companyName)) {
+                        contentLayout.addView(ui.createInfoCard(activity, "Company", companyName, "mw_places_business_center", ui.getThemeColor("surface-variant"), ui.getThemeColor("on-surface")));
+                }
+                }
+                if (dataObj.has("internetAddresses")) {
+                    internetAddresses = dataObj.getJSONArray("internetAddresses");
+                    for (int i = 0; i < internetAddresses.length(); i++) {
+                        internetAddr = internetAddresses.getJSONObject(i);
+                        if (!internetAddr.has("service") || !internetAddr.has("id")) continue;
+                        service = internetAddr.getString("service");
+                        addrId = internetAddr.getString("id");
+                        iconName = "mw_social_people";
+                        serviceLabel = service;
+                        if (service.equals("email")) { iconName = "mw_communication_email"; serviceLabel = "Email"; }
+                        else if (service.equals("twitter")) { serviceLabel = "Twitter"; }
+                        else if (service.equals("facebook")) { serviceLabel = "Facebook"; }
+                        else if (service.equals("instagram")) { serviceLabel = "Instagram"; }
+                        else if (service.equals("url")) { iconName = "mw_editor_insert_link"; serviceLabel = "Website"; }
+                        contentLayout.addView(ui.createInfoCard(activity, serviceLabel, addrId, iconName, ui.getThemeColor("surface-variant"), ui.getThemeColor("on-surface")));
+                    }
+                }
+            } catch(Exception e) {
+                u.logToFile("Error parsing JSON details: " + e.getMessage());
+            }
+        }
+    }
+
+    createButtonLayout(activity, number, details, csName, name, blockReason) {
+        isInPhonebook = u.isValidString(csName);
+        isBlocked = blockReason != null;
+
+        buttonLayout = new LinearLayout(activity);
+        buttonLayout.setOrientation(LinearLayout.HORIZONTAL);
+        buttonLayout.setGravity(Gravity.CENTER);
+        buttonLayoutParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        buttonLayoutParams.topMargin = u.dpToPx(8);
+        buttonLayoutParams.bottomMargin = u.dpToPx(8);
+        buttonLayout.setLayoutParams(buttonLayoutParams);
+
+        callButton = ui.createStyledButton(activity, "Call", "mw_communication_call", "primary", "on-primary");
+        callButtonParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        callButtonParams.rightMargin = u.dpToPx(4);
+        callButton.setLayoutParams(callButtonParams);
+        callButton.setOnClickListener(new View.OnClickListener() {
+            onClick(v) {
+                u.makeCall(number);
+            }
+        });
+        ui.setupLongPressHandler(callButton, new Runnable() {
+            run() {
+                try {
+                    cleanNumber = number.replaceAll("[^0-9+]", "");
+                    intent = new Intent(Intent.ACTION_VIEW);
+                    intent.setData(android.net.Uri.parse("whatsapp://call-phone-number/?phone=" + cleanNumber));
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    activity.startActivity(intent);
+                    tasker.showToast("WhatsApp Call");
+                } catch(Exception e) {
+                    tasker.showToast("WhatsApp not installed");
+                }
+            }
+        });
+        buttonLayout.addView(callButton);
+
+        smsButton = ui.createStyledButton(activity, "SMS", "mw_communication_textsms", "surface-variant", "on-surface-variant");
+        smsButtonParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        smsButtonParams.rightMargin = u.dpToPx(4);
+        smsButton.setLayoutParams(smsButtonParams);
+        smsButton.setOnClickListener(new View.OnClickListener() {
+            onClick(v) {
+                u.sendSms(number);
+            }
+        });
+        ui.setupLongPressHandler(smsButton, new Runnable() {
+            run() {
+                try {
+                    cleanNumber = number.replaceAll("[^0-9+]", "");
+                    intent = new Intent(Intent.ACTION_VIEW);
+                    intent.setData(android.net.Uri.parse("whatsapp://send/?phone=" + cleanNumber));
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    activity.startActivity(intent);
+                    tasker.showToast("WhatsApp Message");
+                } catch(Exception e) {
+                    tasker.showToast("WhatsApp not installed");
+                }
+            }
+        });
+        buttonLayout.addView(smsButton);
+
+        if (isInPhonebook) {
+            contactViaButton = ui.createStyledButton(activity, "Contact", "mw_action_touch_app", "surface-variant", "on-surface-variant");
+            contactViaParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+            contactViaParams.rightMargin = u.dpToPx(4);
+            contactViaButton.setLayoutParams(contactViaParams);
+            contactViaButton.setOnClickListener(new View.OnClickListener() {
+                onClick(v) {
+                    ui.showContactViaDialog(activity, number);
+                }
+            });
+            buttonLayout.addView(contactViaButton);
+        } else {
+            saveButton = ui.createStyledButton(activity, "Save", "mw_content_save", "surface-variant", "on-surface-variant");
+            saveButtonParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+            saveButtonParams.rightMargin = u.dpToPx(4);
+            saveButton.setLayoutParams(saveButtonParams);
+            saveButton.setOnClickListener(new View.OnClickListener() {
+                onClick(v) {
+                    try {
+                        intent = new Intent(android.content.Intent.ACTION_INSERT);
+                        intent.setType(android.provider.ContactsContract.Contacts.CONTENT_TYPE);
+                        intent.putExtra(android.provider.ContactsContract.Intents.Insert.PHONE, number);
+                        intent.putExtra(android.provider.ContactsContract.Intents.Insert.NAME, name);
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        activity.startActivity(intent);
+                    } catch(Exception e) {
+                        tasker.showToast("Cannot save contact");
+                    }
+                }
+            });
+            buttonLayout.addView(saveButton);
+        }
+
+        if (isBlocked) {
+            unblockButton = ui.createStyledButton(activity, "Unblock", "mw_action_lock_open", "surface-variant", "on-surface-variant");
+            unblockButtonParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+            unblockButtonParams.rightMargin = u.dpToPx(4);
+            unblockButton.setLayoutParams(unblockButtonParams);
+            unblockButton.setOnClickListener(new View.OnClickListener() {
+                onClick(v) {
+                    currentBlockReason = d.getBlockReason(number, csName, details);
+                    if (currentBlockReason == null) {
+                        tasker.showToast("Number is not blocked");
+                        closeDetailsView(activity, true);
+                        return;
+                    }
+                    if (currentBlockReason.contains("User Filter (number matches")) {
+                        db = null;
+                        try {
+                            e164Number = u.convertToE164(number);
+                            db = d.getWritableDb();
+                            rowsDeleted = db.delete("filters", "type = ? AND field = ? AND value = ?",
+                                new String[]{"Block", "number", e164Number});
+                            if (rowsDeleted > 0) u.logToFile("Deleted user filter for: " + e164Number);
+                            else u.logToFile("No matching filter found");
+                        } catch (Exception e) {
+                            u.logToFile("Error deleting filter: " + e.getMessage());
+                            tasker.showToast("Failed to unblock: " + e.getMessage());
+                            return;
+                        } finally {
+                            u.closeQuietly(db);
+                        }
+                    }
+                    recheckBlockReason = d.getBlockReason(number, csName, details);
+                    if (recheckBlockReason != null) {
+                        ui.showUserFiltersDialog(activity, "unblock", number, name, details);
+                    } else {
+                        tasker.showToast("Number unblocked");
+                        closeDetailsView(activity, true);
+                    }
+                }
+            });
+            buttonLayout.addView(unblockButton);
+        } else {
+            blockButton = ui.createStyledButton(activity, "Block", "mw_content_block", "error", "on-error");
+            blockButtonParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+            blockButtonParams.rightMargin = u.dpToPx(4);
+            blockButton.setLayoutParams(blockButtonParams);
+            blockButton.setOnClickListener(new View.OnClickListener() {
+                onClick(v) {
+                    ui.showUserFiltersDialog(activity, "block", number, name, details);
+                }
+            });
+            buttonLayout.addView(blockButton);
+        }
+
+        deleteButton = ui.createStyledButton(activity, "Delete", "mw_action_delete_forever", "error", "on-error");
+        deleteButton.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+        deleteButton.setOnClickListener(new View.OnClickListener() {
+            onClick(v) {
+                dialogTitle = (!isStandalone && isCallLog) ? "Delete from call log?" : "Delete from database?";
+                confirmAction = new Runnable() {
+                    run() {
+                        try {
+                            if (!isStandalone && isCallLog) deleteFromCallLog(number);
+                            else deleteFromDatabase(number);
+                            closeDetailsView(activity, false);
+                            if (onDeleted != null) onDeleted.run();
+                        } catch(Exception e) {
+                            tasker.showToast("Delete failed: " + e.getMessage());
+                        }
+                    }
+                };
+                ui.showConfirmDialog(activity, dialogTitle, null, "DELETE", confirmAction);
+            }
+        });
+        ui.setupLongPressHandler(deleteButton, new Runnable() {
+            run() {
+                confirmAction = new Runnable() {
+                    run() {
+                        try {
+                            deleteEverything(number);
+                            closeDetailsView(activity, false);
+                            if (onDeleted != null) onDeleted.run();
+                        } catch(Exception e) {
+                            tasker.showToast("Delete failed: " + e.getMessage());
+                        }
+                    }
+                };
+                ui.showConfirmDialog(activity, "Delete from database AND call log?", null, "DELETE ALL", confirmAction);
+            }
+        });
+        buttonLayout.addView(deleteButton);
+
+        return buttonLayout;
+    }
+
+    closeDetailsView(activity, shouldRefresh) {
+        if (detailOverlay != null && detailOverlay.getParent() != null) {
+            parent = detailOverlay.getParent();
+            parent.removeView(detailOverlay);
+            detailOverlay = null;
+        }
+        if (isStandalone) {
+            ui.cleanup();
+            if (currentAppTask != null) currentAppTask.finishAndRemoveTask();
+            else activity.finish();
+        } else if (shouldRefresh && onClose != null) {
+            onClose.run();
+        }
+    }
+
+    createDetailView(activity, number) {
+        detailRoot = new FrameLayout(activity);
+        detailRoot.setFocusableInTouchMode(true);
+        detailRoot.requestFocus();
+        detailRoot.setBackgroundColor(Color.parseColor("#80000000"));
+
+        detailCard = new LinearLayout(activity);
+        detailCard.setOrientation(LinearLayout.VERTICAL);
+        detailCard.setBackgroundColor(ui.getColorInt("surface"));
+        displayMetrics = activity.getResources().getDisplayMetrics();
+        cardWidth = Math.round(displayMetrics.widthPixels * 0.9f);
+        cardHeight = Math.round(displayMetrics.heightPixels * 0.7f);
+        cardParams = new FrameLayout.LayoutParams(cardWidth, cardHeight);
+        cardParams.gravity = Gravity.CENTER;
+        detailCard.setLayoutParams(cardParams);
+        detailCard.setPadding(u.dpToPx(16), u.dpToPx(16), u.dpToPx(16), u.dpToPx(16));
+        cardBg = ui.createCardBackground(ui.getThemeColor("surface"), 16);
+        detailCard.setBackground(cardBg);
+        detailCard.setElevation(u.dpToPx(8));
+
+        scrollableSection = new ScrollView(activity);
+        scrollableParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f);
+        scrollableSection.setLayoutParams(scrollableParams);
+        contentLayout = new LinearLayout(activity);
+        contentLayout.setOrientation(LinearLayout.VERTICAL);
+        contentLayout.setPadding(u.dpToPx(16), u.dpToPx(16), u.dpToPx(16), u.dpToPx(8));
+        scrollableSection.addView(contentLayout);
+        detailCard.addView(scrollableSection);
+
+        details = d.loadNumberDetails(number);
+        csName = d.getPhoneBookName(number);
+        shouldFetch = d.needsUpdate(details);
+        if (shouldFetch) u.logToFile("Data needs update, will fetch in background");
+        blockReason = d.getBlockReason(number, csName, details);
+
+        populateDetailView(activity, contentLayout, number, details, csName, blockReason);
+
+        name = (details != null && details[0] != null) ? details[0] : number;
+        buttonLayout = createButtonLayout(activity, number, details, csName, name, blockReason);
+        detailCard.addView(buttonLayout);
+        detailRoot.addView(detailCard);
+
+        detailRoot.setOnKeyListener(new View.OnKeyListener() {
+            onKey(v, keyCode, event) {
+                if (keyCode == android.view.KeyEvent.KEYCODE_BACK && event.getAction() == android.view.KeyEvent.ACTION_UP) {
+                    closeDetailsView(activity, false);
+                    return true;
+                }
+                return false;
+            }
+        });
+        detailRoot.setOnClickListener(new View.OnClickListener() {
+            onClick(v) {
+                closeDetailsView(activity, false);
+            }
+        });
+        detailCard.setOnClickListener(new View.OnClickListener() {
+            onClick(v) {}
+        });
+
+        detailOverlay = detailRoot;
+
+        if (shouldFetch) fetchAndUpdate(number, activity);
+
+        return detailRoot;
+    }
+    
+    return this;
+}

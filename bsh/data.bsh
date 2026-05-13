@@ -1,0 +1,619 @@
+import android.content.ContentValues;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.net.Uri;
+import com.joaomgcd.taskerm.action.java.JavaCodeException;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.HashMap;
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+
+data() {
+    u = util();
+    CACHE_EXPIRY_SECONDS = 30 * 86400;
+    
+    // Initialize the DB Helper from dbHelper.bsh
+    helper = dbHelper();
+    
+    reloadDb() {
+        try {
+            if (helper != null) helper.close();
+        } catch (Exception e) {}
+        helper = dbHelper();
+    }
+
+    getReadableDb() {
+        return helper.getReadableDatabase();
+    }
+
+    getWritableDb() {
+        return helper.getWritableDatabase();
+    }
+    
+    loadNumberDetails(number) {
+        e164Number = u.convertToE164(number);
+        db = null;
+        cursor = null;
+        try {
+            db = getReadableDb();
+            cursor = db.rawQuery("SELECT name, json, spam_score, is_verified, image, note, timestamp FROM data WHERE number_e164 = ?", new String[]{e164Number});
+            if (cursor.moveToFirst()) {
+                details = new Object[7];
+                details[0] = cursor.getString(0);
+                details[1] = cursor.getString(1);
+                details[2] = cursor.getInt(2);
+                details[3] = cursor.getInt(3) == 1;
+                details[4] = cursor.getString(4);
+                
+                photo = getContactPhoto(e164Number);
+                if (u.isValidString(photo)) {
+                    details[4] = photo;
+                }
+                
+                details[5] = cursor.getString(5);
+                details[6] = cursor.getLong(6);
+                currentTime = System.currentTimeMillis() / 1000;
+                timestamp = details[6];
+                
+                if (currentTime - timestamp > CACHE_EXPIRY_SECONDS) {
+                    u.logToFile("Data older than 30 days, will fetch fresh data");
+                }
+                return details;
+            }
+        } catch (Exception e) {
+            u.logToFile("Error loading number details: " + e.getMessage());
+        } finally {
+            u.closeQuietly(cursor);
+            u.closeQuietly(db);
+        }
+        return null;
+    }
+    
+    needsUpdate(details) {
+        if (details == null) return true;
+        if (details.length < 7) return false;
+        currentTime = System.currentTimeMillis() / 1000;
+        timestamp = details[6];
+        return (currentTime - timestamp) > CACHE_EXPIRY_SECONDS;
+    }
+    
+    fetchFromTruecaller(number) {
+        e164Number = u.convertToE164(number);
+        installationId = tasker.getVariable("TC_installation_id");
+        
+        if (!u.isValidString(installationId)) {
+            u.logToFile("TC_installation_id not set");
+            throw new JavaCodeException("TC_installation_id not set");
+        }
+        
+        userAgent = tasker.getVariable("TC_user_agent");
+        if (!u.isValidString(userAgent)) userAgent = "Truecaller/11.75.5 (Android;10)";
+        
+        try {
+            urlString = "https://search5-noneu.truecaller.com/v2/search?q=" + 
+                java.net.URLEncoder.encode(e164Number, "UTF-8") + 
+                "&countryCode=" + u.getCountryIso() + 
+                "&type=1&encoding=json";
+                
+            httpClient = new OkHttpClient();
+            request = new Request.Builder()
+                .url(urlString)
+                .addHeader("Authorization", "Bearer " + installationId)
+                .addHeader("user-agent", userAgent)
+                .build();
+            
+            response = httpClient.newCall(request).execute();
+            
+            try {
+                if (response.isSuccessful()) {
+                    jsonResponse = response.body().string();
+                    details = saveToDatabase(number, e164Number, jsonResponse);
+                    
+                    if (details != null) {
+                        return details;
+                    } else {
+                        throw new Exception("Failed to save data");
+                    }
+                } else {
+                    errorBody = "";
+                    try {
+                        body = response.body();
+                        if (body != null) {
+                            rawError = body.string();
+                            errorJson = new JSONObject(rawError);
+                            status = errorJson.optInt("status", 0);
+                            message = errorJson.optString("message", rawError);
+                            errorBody = " - " + (status != 0 ? status + " " : "") + message;
+                        }
+                    } catch (Exception parseEx) {}
+                    u.logToFile("HTTP request failed: " + response.code() + errorBody);
+                    throw new Exception("HTTP " + response.code() + errorBody);
+                }
+            } finally {
+                response.close();
+            }
+        } catch (Exception e) {
+            u.logToFile("Error fetching from Truecaller: " + e.getMessage());
+            throw new JavaCodeException("Failed to fetch: " + e.getMessage());
+        }
+    }
+    
+    saveToDatabase(number, numberE164, jsonResponse) {
+        db = null;
+        cursor = null;
+        try {
+            json = new JSONObject(jsonResponse);
+            dataArray = json.getJSONArray("data");
+            if (dataArray.length() == 0) {
+                u.logToFile("No data in response");
+                return null;
+            }
+            dataObj = dataArray.getJSONObject(0);
+            db = getWritableDb();
+            db.beginTransaction();
+            try {
+                existingName = null;
+                nameModified = 0;
+                existingNote = null;
+                
+                cursor = db.rawQuery("SELECT name, name_modified, note FROM data WHERE number_e164 = ?", new String[]{numberE164});
+                if (cursor.moveToFirst()) {
+                    existingName = cursor.getString(0);
+                    nameModified = cursor.getInt(1);
+                    existingNote = cursor.getString(2);
+                }
+                u.closeQuietly(cursor);
+                cursor = null;
+                
+                db.execSQL("INSERT OR REPLACE INTO number_map (number, number_e164) VALUES (?, ?)", new String[]{number, numberE164});
+                    
+                values = new android.content.ContentValues();
+                values.put("number_e164", numberE164);
+                values.put("json", jsonResponse);
+                values.put("timestamp", String.valueOf(System.currentTimeMillis() / 1000));
+                tcName = null;
+                
+                if (dataObj.has("name")) {
+                    name = dataObj.getString("name");
+                    if (u.isValidString(name)) tcName = name;
+                }
+                
+                if (nameModified == 1 && u.isValidString(existingName)) {
+                    values.put("name", existingName);
+                    values.put("name_modified", 1);
+                    tcName = existingName;
+                } else if (tcName != null) {
+                    values.put("name", tcName);
+                    values.put("name_modified", 0);
+                }
+                
+                if (u.isValidString(existingNote)) {
+                    values.put("note", existingNote);
+                }
+                
+                isVerified = 0;
+                if (dataObj.has("badges")) {
+                    badges = dataObj.getJSONArray("badges");
+                    for (int i = 0; i < badges.length(); i++) {
+                        badge = badges.getString(i);
+                        if (badge.toLowerCase().contains("verified")) {
+                            isVerified = 1;
+                            break;
+                        }
+                    }
+                }
+                values.put("is_verified", isVerified);
+                
+                spamScore = 0;
+                if (dataObj.has("spamInfo")) {
+                    spamInfo = dataObj.getJSONObject("spamInfo");
+                    if (spamInfo.has("spamScore") && spamInfo.getInt("spamScore") > 0) {
+                        spamScore = spamInfo.getInt("spamScore");
+                    }
+                }
+                values.put("spam_score", spamScore);
+                
+                image = null;
+                if (dataObj.has("image") && !dataObj.isNull("image")) {
+                    imgUrl = dataObj.getString("image");
+                    if (u.isValidString(imgUrl)) {
+                        image = imgUrl;
+                        values.put("image", image);
+                    }
+                }
+                
+                db.replace("data", null, values);
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+            }
+            
+            u.logToFile("Saved to database: " + numberE164);
+            
+            details = new Object[6];
+            details[0] = tcName;
+            details[1] = jsonResponse;
+            details[2] = spamScore;
+            details[3] = isVerified == 1;
+            details[4] = image;
+            details[5] = existingNote;
+            return details;
+        } catch (Exception e) {
+            u.logToFile("Error saving to database: " + e.getMessage());
+            return null;
+        } finally {
+            u.closeQuietly(cursor);
+            u.closeQuietly(db);
+        }
+    }
+    
+    getPhoneBookName(number) {
+        contactCursor = null;
+        try {
+            e164Number = u.convertToE164(number);
+            contactsUri = android.net.Uri.parse("content://com.android.contacts/data/phones");
+            projection = new String[]{"display_name"};
+            selection = "data4 = ?";
+            selectionArgs = new String[]{e164Number};
+            contactCursor = context.getContentResolver().query(contactsUri, projection, selection, selectionArgs, null);
+            if (contactCursor != null && contactCursor.moveToFirst()) {
+                return contactCursor.getString(0);
+            }
+        } catch (Exception e) {
+            u.logToFile("Error loading contact name: " + e.getMessage());
+        } finally {
+            u.closeQuietly(contactCursor);
+        }
+        return null;
+    }
+
+    getContactPhoto(number) {
+        contactCursor = null;
+        try {
+            e164Number = u.convertToE164(number);
+            contactsUri = android.net.Uri.parse("content://com.android.contacts/data/phones");
+            projection = new String[]{"photo_uri"};
+            selection = "data4 = ?";
+            selectionArgs = new String[]{e164Number};
+            contactCursor = context.getContentResolver().query(contactsUri, projection, selection, selectionArgs, null);
+            if (contactCursor != null && contactCursor.moveToFirst()) {
+                return contactCursor.getString(0);
+            }
+        } catch (Exception e) {} finally {
+            u.closeQuietly(contactCursor);
+        }
+        return null;
+    }
+    
+    getBlockReason(number, csName, details) {
+        e164Number = u.convertToE164(number);
+        db = null;
+        cursor = null;
+        cursor2 = null;
+        try {
+            db = getReadableDb();
+            blockAllCalls = tasker.getVariable("TC_block_all_calls");
+            blockUnsavedNumbers = tasker.getVariable("TC_block_unsaved_numbers");
+            blockTopSpammers = tasker.getVariable("TC_spam_calls_block_top_spammers");
+            blockAdditionalSpam = tasker.getVariable("TC_spam_calls_block_additional");
+            earlyDetection = tasker.getVariable("TC_spam_calls_early_detection");
+            userFiltersEnabled = tasker.getVariable("TC_user_filters");
+            
+            if ("true".equals(userFiltersEnabled)) {
+                query = "WITH vars(is_contact) AS ( " +
+                    "VALUES (CASE WHEN COALESCE(NULLIF(?, ''), NULL) IS NOT NULL THEN 1 ELSE 0 END) " +
+                    "), " +
+                    "input(field, val) AS ( VALUES " +
+                    "('number', ?), " +
+                    "('name', ?), " +
+                    "('country code', ?), " +
+                    "('dialing code', ?), " +
+                    "('carrier', ?) " +
+                    "), " +
+                    "match_filter AS ( " +
+                    "SELECT f.type, f.field, f.value " +
+                    "FROM filters f " +
+                    "JOIN input i ON f.field = i.field " +
+                    "WHERE f.enabled = 1 " +
+                    "AND i.val IS NOT NULL " +
+                    "AND ((SELECT is_contact FROM vars)=0 OR f.field='number') " +
+                    "AND ( " +
+                    "(f.value NOT LIKE '%*%' AND i.val = f.value COLLATE NOCASE) " +
+                    "OR (f.value LIKE '%*%' AND i.val LIKE REPLACE(f.value,'*','%') COLLATE NOCASE) " +
+                    ") " +
+                    "ORDER BY CASE f.type WHEN 'Allow' THEN 0 ELSE 1 END " +
+                    "LIMIT 1 " +
+                    ") " +
+                    "SELECT " +
+                    "CASE WHEN mf.type IS NOT NULL THEN mf.type ELSE 'Default' END AS decision, " +
+                    "CASE WHEN mf.type IS NOT NULL THEN " +
+                    "mf.field || ' ' || " +
+                    "CASE " +
+                    "WHEN mf.value LIKE '*%' AND mf.value LIKE '%*' THEN 'contains' " +
+                    "WHEN mf.value LIKE '*%' THEN 'ends with' " +
+                    "WHEN mf.value LIKE '%*' THEN 'starts with' " +
+                    "ELSE 'matches' " +
+                    "END || ' ' || TRIM(mf.value, '*') " +
+                    "ELSE 'No reason' " +
+                    "END AS reason " +
+                    "FROM match_filter mf";
+                    
+                tcName = details != null ? details[0] : null;
+                countryCode = null;
+                dialingCode = null;
+                carrier = null;
+                if (details != null) {
+                    jsonString = details[1];
+                    if (u.isValidString(jsonString)) {
+                        try {
+                            json = new JSONObject(jsonString);
+                            dataArray = json.getJSONArray("data");
+                            if (dataArray.length() > 0) {
+                                dataObj = dataArray.getJSONObject(0);
+                                if (dataObj.has("countryCode")) countryCode = dataObj.getString("countryCode");
+                                if (dataObj.has("dialingCode")) dialingCode = dataObj.getString("dialingCode");
+                                if (dataObj.has("phones")) {
+                                    phones = dataObj.getJSONArray("phones");
+                                    if (phones.length() > 0) {
+                                        phone = phones.getJSONObject(0);
+                                        if (phone.has("carrier")) carrier = phone.getString("carrier");
+                                    }
+                                }
+                            }
+                        } catch (Exception e) {}
+                    }
+                }
+                cursor = db.rawQuery(query, new String[]{
+                    csName != null ? csName : "",
+                    e164Number,
+                    tcName != null ? tcName : "",
+                    countryCode != null ? countryCode : "",
+                    dialingCode != null ? dialingCode : "",
+                    carrier != null ? carrier : ""
+                });
+                if (cursor.moveToFirst()) {
+                    decision = cursor.getString(0);
+                    reason = cursor.getString(1);
+                    if ("Block".equals(decision)) return "User Filter (" + reason + ")";
+                    else if ("Allow".equals(decision)) return null;
+                }
+            }
+            if ("true".equals(blockAllCalls)) return "Block all calls";
+            if ("true".equals(blockUnsavedNumbers) && !u.isValidString(csName)) return "Block unsaved numbers";
+            
+            if (details != null) {
+                jsonString = details[1];
+                spamScore = details[2];
+                if (u.isValidString(jsonString)) {
+                    try {
+                        json = new JSONObject(jsonString);
+                        dataArray = json.getJSONArray("data");
+                        if (dataArray.length() > 0) {
+                            dataObj = dataArray.getJSONObject(0);
+                            spamType = null;
+                            if (dataObj.has("spamInfo")) {
+                                spamInfo = dataObj.getJSONObject("spamInfo");
+                                if (spamInfo.has("spamType")) {
+                                    spamType = spamInfo.getString("spamType");
+                                }
+                            }
+                            if ("true".equals(blockTopSpammers) && spamType != null) {
+                                if ("TOP_SPAMMER".equals(spamType)) {
+                                    return "Top Spammer" + (spamScore > 0 ? " (spam reports: " + spamScore + ")" : "");
+                                }
+                            }
+                            if ("true".equals(blockAdditionalSpam) && spamType != null) {
+                                if ("SPAMMER".equals(spamType)) {
+                                    return "Block Additional Spam" + (spamScore > 0 ? " (spam reports: " + spamScore + ")" : "");
+                                }
+                            }
+                            if ("true".equals(earlyDetection) && dataObj.has("searchWarnings")) {
+                                warnings = dataObj.getJSONArray("searchWarnings");
+                                for (int i = 0; i < warnings.length(); i++) {
+                                    warning = warnings.getJSONObject(i);
+                                    if (warning.has("id")) {
+                                        warningId = warning.getString("id");
+                                        if ("1".equals(warningId) || "2".equals(warningId) || "12".equals(warningId) || "100".equals(warningId)) {
+                                            return "Early Spam Detection";
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Exception e) {}
+                }
+            }
+            /*if ("true".equals(blockTopSpammers)) {
+                cursor2 = db.rawQuery("SELECT reports FROM topspammers WHERE number = ?", new String[]{e164Number});
+                if (cursor2.moveToFirst()) {
+                    reports = cursor2.getInt(0);
+                    return "Top Spammer (spam reports: " + reports + ")";
+                }
+            }*/
+        } catch (Exception e) {
+            u.logToFile("Error checking block reason: " + e.getMessage());
+        } finally {
+            u.closeQuietly(cursor);
+            u.closeQuietly(cursor2);
+            u.closeQuietly(db);
+        }
+        return null;
+    }
+    
+    getWarningMap(warningDataCsv) {
+        warningMap = new HashMap();
+        if (warningDataCsv != null && !warningDataCsv.isEmpty()) {
+            lines = warningDataCsv.split("\n");
+            for (int i = 1; i < lines.length; i++) {
+                parts = lines[i].split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)");
+                if (parts.length >= 6) {
+                    id = parts[0].replace("\"", "");
+                    warningInfo = new Object[5];
+                    for (int j = 0; j < 5; j++) {
+                        warningInfo[j] = parts[j + 1].replace("\"", "");
+                    }
+                    warningMap.put(id, warningInfo);
+                }
+            }
+        }
+        return warningMap;
+    }
+
+    getTagDetails(tagId) {
+      db = null;
+      cursor = null;
+      try {
+        db = getReadableDb();
+        cursor = db.rawQuery("SELECT c.name,CASE WHEN c.iconUrl IS NOT NULL AND c.iconUrl <> 'null' THEN c.iconUrl ELSE p.iconUrl END AS finalIconUrl FROM tags c LEFT JOIN tags p ON c.parentId = p.id WHERE c.id = ?", new String[]{tagId});
+        if (cursor.moveToFirst()) {
+          result = new String[]{cursor.getString(0), cursor.getString(1)};
+          return result;
+        }
+      } catch (Exception e) {}
+      finally {
+        u.closeQuietly(cursor);
+        u.closeQuietly(db);
+      }
+      return null;
+    }
+    
+    getSpamCategoryDetails(categoryId) {
+      db = null;
+      cursor = null;
+      try {
+        db = getReadableDb();
+        cursor = db.rawQuery("SELECT name, icon FROM spam_categories WHERE id = ?", new String[]{String.valueOf(categoryId)});
+        if (cursor.moveToFirst()) {
+          result = new String[]{cursor.getString(0), cursor.getString(1)};
+          return result;
+        }
+      } catch (Exception e) {}
+      finally {
+        u.closeQuietly(cursor);
+        u.closeQuietly(db);
+      }
+      return null;
+    }
+
+    getLastCall(number) {
+        e164Number = u.convertToE164(number);
+        callLogCursor = null;
+        try {
+            callLogUri = android.net.Uri.parse("content://call_log/calls");
+            projection = new String[]{"type", "date", "duration"};
+            selection = "number = ? OR normalized_number = ?";
+            selectionArgs = new String[]{number, e164Number};
+            callLogCursor = context.getContentResolver().query(callLogUri, projection, selection, selectionArgs, "date DESC");
+            if (callLogCursor != null && callLogCursor.moveToFirst()) {
+                result = new Object[3];
+                result[0] = new Integer(callLogCursor.getInt(0));
+                result[1] = new Long(callLogCursor.getLong(1));
+                result[2] = new Integer(callLogCursor.getInt(2));
+                return result;
+            }
+        } catch(Exception e) {
+            u.logToFile("Error loading last call: " + e.getMessage());
+        } finally {
+            u.closeQuietly(callLogCursor);
+        }
+        return null;
+    }
+    
+    saveFilter(type, field, value, note) {
+        db = null;
+        try {
+            db = getWritableDb();
+            if (note != null && !note.isEmpty()) {
+                db.execSQL("INSERT OR REPLACE INTO filters (type, field, value, norm_val, enabled, note) VALUES (?, ?, ?, ?, 1, ?)",
+                    new String[]{type, field, value, value, note});
+            } else {
+                db.execSQL("INSERT OR REPLACE INTO filters (type, field, value, norm_val, enabled) VALUES (?, ?, ?, ?, 1)",
+                    new String[]{type, field, value, value});
+            }
+        } catch (Exception e) {
+            u.logToFile("Error saving filter: " + e.getMessage());
+        } finally {
+            u.closeQuietly(db);
+        }
+    }
+
+    toggleFilter(value, enabled) {
+        db = null;
+        try {
+            db = getWritableDb();
+            db.execSQL("UPDATE filters SET enabled = ? WHERE value = ?", new Object[]{enabled ? 1 : 0, value});
+        } catch (Exception e) {
+            u.logToFile("Error toggling filter: " + e.getMessage());
+        } finally {
+            u.closeQuietly(db);
+        }
+    }
+
+    deleteFilter(value) {
+        db = null;
+        try {
+            db = getWritableDb();
+            db.execSQL("DELETE FROM filters WHERE value = ?", new String[]{value});
+        } catch (Exception e) {
+            u.logToFile("Error deleting filter: " + e.getMessage());
+        } finally {
+            u.closeQuietly(db);
+        }
+    }
+
+    loadFilters() {
+        list = new java.util.ArrayList();
+        db = null;
+        cursor = null;
+        try {
+            db = getReadableDb();
+            cursor = db.rawQuery("SELECT type, field, value, enabled, note FROM filters ORDER BY type, field, value", null);
+            while (cursor.moveToNext()) {
+                filter = new Object[5];
+                filter[0] = cursor.getString(0);
+                filter[1] = cursor.getString(1);
+                filter[2] = cursor.getString(2);
+                filter[3] = Boolean.valueOf(cursor.getInt(3) == 1);
+                filter[4] = cursor.getString(4);
+                list.add(filter);
+            }
+        } catch (Exception e) {
+            u.logToFile("Error loading filters: " + e.getMessage());
+        } finally {
+            u.closeQuietly(cursor);
+            u.closeQuietly(db);
+        }
+        return list;
+    }
+
+    loadFilterContacts() {
+        list = new java.util.ArrayList();
+        db = null;
+        cursor = null;
+        try {
+            db = getReadableDb();
+            cursor = db.rawQuery("SELECT CASE WHEN is_verified = 1 THEN IFNULL(name,'Unknown')||' ✅' WHEN spam_score > 0 THEN IFNULL(name,'Unknown')||' 🔴' ELSE IFNULL(name,'Unknown') END, number_e164, json FROM data ORDER BY timestamp DESC", null);
+            while (cursor.moveToNext()) {
+                contact = new Object[3];
+                contact[0] = cursor.getString(0);
+                contact[1] = cursor.getString(1);
+                contact[2] = cursor.getString(2);
+                list.add(contact);
+            }
+        } catch (Exception e) {
+            u.logToFile("Error loading contacts: " + e.getMessage());
+        } finally {
+            u.closeQuietly(cursor);
+            u.closeQuietly(db);
+        }
+        return list;
+    }
+    
+    return this;
+}
