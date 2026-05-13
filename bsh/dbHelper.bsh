@@ -44,7 +44,7 @@ dbHelper() {
                 
                 db.beginTransaction();
                 try {
-                    if (oldVersion < 3) {
+                    if (oldVersion < 11) {
                         u.logToFile("Version too old, wiping database and starting fresh...");
                         db.execSQL("DROP TABLE IF EXISTS data");
                         db.execSQL("DROP TABLE IF EXISTS number_map");
@@ -56,114 +56,6 @@ dbHelper() {
                         db.execSQL("DROP TABLE IF EXISTS spam_categories");
                         createTables(db);
                     } else {
-                        if (oldVersion < 4) {
-                            db.execSQL("CREATE TABLE IF NOT EXISTS filters (type TEXT, condition TEXT, value TEXT, regexp TEXT, UNIQUE(type,value), UNIQUE(condition,value))");
-                        }
-                        if (oldVersion < 6) {
-                            Cursor c = null;
-                            ArrayList oldFilters = new ArrayList();
-                            try {
-                                c = db.rawQuery("SELECT type, condition, value, regexp FROM filters", null);
-                                while (c != null && c.moveToNext()) {
-                                    oldFilters.add(new String[]{ c.getString(0), c.getString(1), c.getString(2), c.getString(3) });
-                                }
-                            } catch(Exception e) {} finally { u.closeQuietly(c); }
-
-                            db.execSQL("DROP TABLE IF EXISTS filters");
-                            db.execSQL("CREATE TABLE IF NOT EXISTS filters (type TEXT, condition TEXT, key TEXT, value TEXT, display_value TEXT, regexp TEXT, UNIQUE(key,value))");
-
-                            for (int i=0; i<oldFilters.size(); i++) {
-                                String[] f = (String[]) oldFilters.get(i);
-                                String type = f[0], cond = f[1], val = f[2], reg = f[3];
-                                String key = "name";
-                                if (val != null && val.matches("^(\\+[0-9]+[\\- \\.]*)?(\\([0-9]+\\)[\\- \\.]*)?([0-9][0-9\\- \\.]+[0-9])$")) {
-                                    key = "number";
-                                }
-                                ContentValues cv = new ContentValues();
-                                cv.put("type", type); cv.put("condition", cond); cv.put("key", key); 
-                                cv.put("value", val); cv.put("display_value", val); cv.put("regexp", reg);
-                                db.insert("filters", null, cv);
-                            }
-                        }
-                        if (oldVersion < 7) {
-                            try { db.execSQL("ALTER TABLE filters ADD COLUMN enabled INTEGER DEFAULT 1"); } catch(Exception e){}
-                        }
-                        if (oldVersion < 8) {
-                            try { db.execSQL("ALTER TABLE data ADD COLUMN name_modified INTEGER DEFAULT 0"); } catch(Exception e){}
-                        }
-                        if (oldVersion < 9) {
-                            Cursor c = null;
-                            ArrayList oldData = new ArrayList();
-                            try {
-                                c = db.rawQuery("SELECT number_e164, name, name_modified, json, timestamp FROM data", null);
-                                while (c != null && c.moveToNext()) {
-                                    oldData.add(new Object[]{ c.getString(0), c.getString(1), new Integer(c.getInt(2)), c.getString(3), new Long(c.getLong(4)) });
-                                }
-                            } catch(Exception e) {} finally { u.closeQuietly(c); }
-
-                            db.execSQL("DROP TABLE IF EXISTS data");
-                            db.execSQL("CREATE TABLE IF NOT EXISTS data (number_e164 TEXT PRIMARY KEY, name TEXT DEFAULT NULL, name_modified INTEGER DEFAULT 0, is_verified INTEGER DEFAULT 0, spam_score INTEGER DEFAULT 0, image TEXT DEFAULT NULL, json TEXT NOT NULL, timestamp INTEGER)");
-
-                            for (int i=0; i<oldData.size(); i++) {
-                                Object[] row = (Object[]) oldData.get(i);
-                                String num = (String) row[0];
-                                String name = (String) row[1];
-                                int name_mod = ((Integer) row[2]).intValue();
-                                String json = (String) row[3];
-                                long ts = ((Long) row[4]).longValue();
-
-                                if ("<null>".equals(name) || "null".equals(name)) {
-                                    name = null;
-                                    name_mod = 0;
-                                }
-
-                                int is_verified = 0;
-                                int spam_score = 0;
-                                String image = null;
-
-                                try {
-                                    JSONObject jo = new JSONObject(json);
-                                    JSONArray dataArr = jo.optJSONArray("data");
-                                    if (dataArr != null && dataArr.length() > 0) {
-                                        JSONObject dataObj = dataArr.getJSONObject(0);
-                                        if (name_mod == 0 && dataObj.has("name") && !dataObj.isNull("name")) {
-                                            name = dataObj.getString("name");
-                                        }
-                                        if (dataObj.has("badges")) {
-                                            JSONArray arr = dataObj.getJSONArray("badges");
-                                            for (int b=0; b<arr.length(); b++) {
-                                                if (arr.getString(b).toLowerCase().contains("verified")) is_verified = 1;
-                                            }
-                                        }
-                                        if (dataObj.has("spamInfo")) {
-                                            JSONObject spamInfo = dataObj.getJSONObject("spamInfo");
-                                            if (spamInfo.has("spamScore")) spam_score = spamInfo.getInt("spamScore");
-                                        }
-                                        if (dataObj.has("image") && !dataObj.isNull("image")) {
-                                            image = dataObj.getString("image");
-                                        }
-                                    }
-                                } catch(Exception e) {}
-
-                                ContentValues cv = new ContentValues();
-                                cv.put("number_e164", num);
-                                cv.put("name", name);
-                                cv.put("name_modified", name_mod);
-                                cv.put("json", json);
-                                cv.put("timestamp", ts);
-                                cv.put("is_verified", is_verified);
-                                cv.put("spam_score", spam_score);
-                                cv.put("image", image);
-                                db.replace("data", null, cv);
-                            }
-                        }
-                        if (oldVersion < 10) {
-                            db.execSQL("DROP TABLE IF EXISTS call_log");
-                            db.execSQL("CREATE TABLE IF NOT EXISTS call_log (date INTEGER, number TEXT PRIMARY KEY, name TEXT)");
-                        }
-                        if (oldVersion < 11) {
-                            try { db.execSQL("ALTER TABLE data ADD COLUMN note TEXT DEFAULT NULL"); } catch(Exception e){}
-                        }
                         if (oldVersion < 12) {
                             Cursor c = null;
                             ArrayList oldFilters = new ArrayList();
