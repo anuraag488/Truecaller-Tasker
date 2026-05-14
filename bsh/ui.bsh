@@ -1337,7 +1337,7 @@ ui() {
             if (taskInfo != null && taskInfo.taskDescription != null) {
                 taskLabel = taskInfo.taskDescription.getLabel();
                 // Check exact match, or handle Tasker's default fallback name
-                if (label.equals(taskLabel) || (label.equals("Truecaller-List") && "Truecaller-Tasker".equals(taskLabel))) {
+                if (label.equals(taskLabel)) {
                     if (killExisting) {
                         task.finishAndRemoveTask();
                         return null;
