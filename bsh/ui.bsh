@@ -30,7 +30,6 @@ import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -200,33 +199,6 @@ ui() {
             return context.getResources().getDrawable(resourceId);
         }
         return null;
-    }
-
-    setupLongPressHandler(view, final Runnable onLongPress) {
-        final boolean[] state = new boolean[]{false};
-        final Runnable wrapper = new Runnable() {
-            run() {
-                state[0] = true;
-                onLongPress.run();
-            }
-        };
-        view.setOnTouchListener(new View.OnTouchListener() {
-            onTouch(v, event) {
-                action = event.getAction();
-                if (action == MotionEvent.ACTION_DOWN) {
-                    state[0] = false;
-                    mainHandler.postDelayed(wrapper, LONG_PRESS_DELAY);
-                    return true;
-                } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-                    mainHandler.removeCallbacks(wrapper);
-                    if (action == MotionEvent.ACTION_UP && !state[0]) {
-                        v.performClick();
-                    }
-                    return true;
-                }
-                return false;
-            }
-        });
     }
 
     showContactViaDialog(activity, number) {

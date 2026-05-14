@@ -337,6 +337,7 @@ viewDetail(ui) {
                 ui.setClip(number);
                 return true;
             }
+            onLongClickUseDefaultHapticFeedback(v) { return true; }
         });
         contentLayout.addView(numberPartsLayout);
 
@@ -460,8 +461,8 @@ viewDetail(ui) {
                 u.makeCall(number);
             }
         });
-        ui.setupLongPressHandler(callButton, new Runnable() {
-            run() {
+        callButton.setOnLongClickListener(new View.OnLongClickListener() {
+            onLongClick(v) {
                 try {
                     cleanNumber = number.replaceAll("[^0-9+]", "");
                     intent = new Intent(Intent.ACTION_VIEW);
@@ -472,7 +473,9 @@ viewDetail(ui) {
                 } catch(Exception e) {
                     tasker.showToast("WhatsApp not installed");
                 }
+                return true;
             }
+            onLongClickUseDefaultHapticFeedback(v) { return true; }
         });
         buttonLayout.addView(callButton);
 
@@ -485,8 +488,8 @@ viewDetail(ui) {
                 u.sendSms(number);
             }
         });
-        ui.setupLongPressHandler(smsButton, new Runnable() {
-            run() {
+        smsButton.setOnLongClickListener(new View.OnLongClickListener() {
+            onLongClick(v) {
                 try {
                     cleanNumber = number.replaceAll("[^0-9+]", "");
                     intent = new Intent(Intent.ACTION_VIEW);
@@ -497,7 +500,9 @@ viewDetail(ui) {
                 } catch(Exception e) {
                     tasker.showToast("WhatsApp not installed");
                 }
+                return true;
             }
+            onLongClickUseDefaultHapticFeedback(v) { return true; }
         });
         buttonLayout.addView(smsButton);
 
@@ -607,8 +612,8 @@ viewDetail(ui) {
                 ui.showConfirmDialog(activity, dialogTitle, null, "DELETE", confirmAction);
             }
         });
-        ui.setupLongPressHandler(deleteButton, new Runnable() {
-            run() {
+        deleteButton.setOnLongClickListener(new View.OnLongClickListener() {
+            onLongClick(v) {
                 confirmAction = new Runnable() {
                     run() {
                         try {
@@ -621,7 +626,9 @@ viewDetail(ui) {
                     }
                 };
                 ui.showConfirmDialog(activity, "Delete from database AND call log?", null, "DELETE ALL", confirmAction);
+                return true;
             }
+            onLongClickUseDefaultHapticFeedback(v) { return true; }
         });
         buttonLayout.addView(deleteButton);
 

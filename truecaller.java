@@ -244,9 +244,34 @@ cleanup() {
 }
 
 loadCallLogData(searchQuery) {
-    list = new ArrayList();
-    db = null;
-    cursor = null;
+        list = new ArrayList();
+        db = null;
+        cursor = null;
+        
+        groupingSettings = tasker.getVariable("TC_call_log_grouping");
+        if (groupingSettings == null) groupingSettings = "Phone"; // Default to no grouping (show all)
+        groupByDate = groupingSettings.contains("Date");
+        groupByContact = groupingSettings.contains("Contact");
+        groupByPhone = groupingSettings.contains("Phone");
+        showHeaders = groupByDate;
+
+        formatDateSection(timestamp) {
+        cal = java.util.Calendar.getInstance();
+        todayYear = cal.get(java.util.Calendar.YEAR);
+        todayDay = cal.get(java.util.Calendar.DAY_OF_YEAR);
+
+        cal.setTimeInMillis(timestamp);
+        callYear = cal.get(java.util.Calendar.YEAR);
+        callDay = cal.get(java.util.Calendar.DAY_OF_YEAR);
+
+        if (todayYear == callYear) {
+            if (todayDay == callDay) return "Today";
+            if (todayDay - 1 == callDay) return "Yesterday";
+        }
+        sdfSection = new java.text.SimpleDateFormat("dd MMM yyyy");
+        return sdfSection.format(new java.util.Date(timestamp));
+    }
+
     try {
         callLogUri = android.net.Uri.parse("content://call_log/calls");
         projection = new String[]{"date", "number", "normalized_number", "name", "type", "duration"};
@@ -268,11 +293,8 @@ loadCallLogData(searchQuery) {
                 if (callNumber == null) callNumber = "";
                 e164 = u.isValidString(normNumber) ? normNumber : u.convertToE164(callNumber);
 
-                if (!seenNumbers.containsKey(e164)) {
-                    seenNumbers.put(e164, true);
-                    uniqueNumbers.add(e164);
-                    rawCalls.add(new Object[]{callNumber, e164, callName, callDate, callType, new Integer(callDuration)});
-                }
+                if (!uniqueNumbers.contains(e164)) uniqueNumbers.add(e164);
+                rawCalls.add(new Object[]{callNumber, e164, callName, callDate, callType, new Integer(callDuration)});
             }
             u.closeQuietly(cursor);
             cursor = null;
@@ -322,6 +344,9 @@ loadCallLogData(searchQuery) {
             t9Pattern = Pattern.compile(getT9Regex(searchQuery));
         }
 
+        lastDateSection = "";
+        seenGroupKeys = new HashMap();
+
         for (int i = 0; i < rawCalls.size(); i++) {
             raw = rawCalls.get(i);
             callNumber = raw[0];
@@ -330,6 +355,7 @@ loadCallLogData(searchQuery) {
             callDate = raw[3];
             callType = raw[4];
             callDuration = ((Integer) raw[5]).intValue();
+            dateSection = formatDateSection(callDate);
 
             tcData = tcDataMap.get(e164);
             tcName = null;
@@ -364,6 +390,22 @@ loadCallLogData(searchQuery) {
                 else if (spamScore > 0) formattedName += " 🔴";
             }
 
+            // Create Lego-style grouping key
+            groupKey = "";
+            
+            // If neither Contact nor Phone is selected, we DO NOT collapse calls.
+            // Every call remains an individual entry.
+            if (!groupByContact && !groupByPhone) {
+                groupKey = java.util.UUID.randomUUID().toString(); 
+            } else {
+                if (groupByDate) groupKey += dateSection + "|";
+                if (groupByContact) groupKey += finalName + "|";
+                if (groupByPhone) groupKey += e164 + "|";
+            }
+
+            if (seenGroupKeys.containsKey(groupKey)) continue;
+            seenGroupKeys.put(groupKey, true);
+
             matches = true;
             if (lowerQuery != null) {
                 matches = false;
@@ -382,6 +424,14 @@ loadCallLogData(searchQuery) {
             }
 
             if (matches) {
+                if (showHeaders && !dateSection.equals(lastDateSection)) {
+                    headerEntry = new Object[8];
+                    headerEntry[0] = dateSection;
+                    headerEntry[7] = -1; // -1 denotes a header row
+                    list.add(headerEntry);
+                    lastDateSection = dateSection;
+                }
+
                 entry = new Object[8];
                 entry[0] = formattedName;
                 entry[1] = e164;
@@ -594,8 +644,8 @@ showStyledMenuDialog(activity) {
         LinearLayout.LayoutParams.WRAP_CONTENT,
         LinearLayout.LayoutParams.WRAP_CONTENT
     ));
-    menuItems = new String[]{"User Filters", "Settings", "Refresh", "Clear Call Log", "Clear Truecaller Log"};
-    menuIcons = new String[]{"mw_content_filter_list", "mw_action_settings", "mw_navigation_refresh", "mw_action_delete", "mw_action_delete"};
+    menuItems = new String[]{"Group By", "User Filters", "Settings", "Refresh", "Clear Call Log", "Clear Truecaller Log"};
+    menuIcons = new String[]{"mw_action_view_list", "mw_content_filter_list", "mw_action_settings", "mw_navigation_refresh", "mw_action_delete", "mw_action_delete"};
     for (int i = 0; i < menuItems.length; i++) {
         itemLayout = createMenuItem(activity, menuItems[i], menuIcons[i], i);
         dialogLayout.addView(itemLayout);
@@ -620,9 +670,103 @@ showStyledMenuDialog(activity) {
                     menuIndex = v.getTag();
                     dialog.dismiss();
                     taskParams = new HashMap();
+                    
                     if (menuIndex == 0) {
-                        uiObj.showUserFiltersDialog(activity, null, null, null, null);
+                        options = new String[]{"Contact", "Date", "Phone"};
+                        currentOption = tasker.getVariable("TC_call_log_grouping");
+                        if (currentOption == null) currentOption = "Phone"; // Default to empty
+
+                        groupDialog = new android.app.Dialog(activity);
+                        groupDialog.requestWindowFeature(1);
+
+                        root = new LinearLayout(activity);
+                        root.setOrientation(LinearLayout.VERTICAL);
+                        root.setBackground(uiObj.createCardBackground(uiObj.getThemeColor("surface"), 16));
+
+                        titleView = new TextView(activity);
+                        titleView.setText("Group Call Log By");
+                        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+                        titleView.setTypeface(null, Typeface.BOLD);
+                        titleView.setTextColor(uiObj.getColorInt("on-surface"));
+                        titleView.setPadding(u.dpToPx(24), u.dpToPx(24), u.dpToPx(24), u.dpToPx(12));
+                        root.addView(titleView);
+
+                        listContainer = new LinearLayout(activity);
+                        listContainer.setOrientation(LinearLayout.VERTICAL);
+                        listContainer.setPadding(u.dpToPx(8), 0, u.dpToPx(8), 0);
+                        root.addView(listContainer);
+
+                        checkBoxes = new android.widget.CheckBox[options.length];
+
+                        for (int i = 0; i < options.length; i++) {
+                            opt = options[i];
+                            cb = new android.widget.CheckBox(activity);
+                            cb.setText(opt);
+                            cb.setTextSize(16);
+                            cb.setTextColor(uiObj.getColorInt("on-surface"));
+                            cb.setPadding(u.dpToPx(16), u.dpToPx(12), u.dpToPx(16), u.dpToPx(12));
+                            if (android.os.Build.VERSION.SDK_INT >= 21) {
+                                cb.setButtonTintList(android.content.res.ColorStateList.valueOf(uiObj.getColorInt("primary")));
+                            }
+                            if (currentOption.contains(opt)) cb.setChecked(true);
+                            checkBoxes[i] = cb;
+                            listContainer.addView(cb);
+                        }
+
+                        buttonContainer = new LinearLayout(activity);
+                        buttonContainer.setOrientation(LinearLayout.HORIZONTAL);
+                        buttonContainer.setGravity(Gravity.END);
+                        buttonContainer.setPadding(u.dpToPx(16), u.dpToPx(16), u.dpToPx(24), u.dpToPx(16));
+
+                        cancelBtn = new android.widget.Button(activity);
+                        cancelBtn.setText("Cancel");
+                        cancelBtn.setTextColor(uiObj.getColorInt("primary"));
+                        cancelBtn.setBackgroundColor(Color.TRANSPARENT);
+                        cancelBtn.setOnClickListener(new View.OnClickListener() {
+                            onClick(View v) { groupDialog.dismiss(); }
+                        });
+                        buttonContainer.addView(cancelBtn);
+
+                        applyBtn = new android.widget.Button(activity);
+                        applyBtn.setText("Apply");
+                        applyBtn.setTextColor(uiObj.getColorInt("on-primary"));
+                        applyBg = new GradientDrawable();
+                        applyBg.setColor(uiObj.getColorInt("primary"));
+                        applyBg.setCornerRadius(u.dpToPx(8));
+                        applyBtn.setBackground(applyBg);
+                        applyBtnParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                        applyBtnParams.leftMargin = u.dpToPx(8);
+                        applyBtn.setLayoutParams(applyBtnParams);
+
+                        applyBtn.setOnClickListener(new View.OnClickListener() {
+                            onClick(View v) {
+                                selected = new ArrayList();
+                                for(int i=0; i<checkBoxes.length; i++) {
+                                    if(checkBoxes[i].isChecked()) selected.add(options[i]);
+                                }
+                                result = "";
+                                for(int i=0; i<selected.size(); i++) {
+                                    if(i>0) result += ",";
+                                    result += selected.get(i);
+                                }
+                                if (result.isEmpty()) result = "none";
+                                tasker.setVariable("TC_call_log_grouping", result);
+                                groupDialog.dismiss();
+                                refreshListView();
+                            }
+                        });
+                        buttonContainer.addView(applyBtn);
+                        root.addView(buttonContainer);
+
+                        groupDialog.setContentView(root);
+                        if (groupDialog.getWindow() != null) {
+                            groupDialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+                            groupDialog.getWindow().setLayout((int)(activity.getResources().getDisplayMetrics().widthPixels * 0.90), ViewGroup.LayoutParams.WRAP_CONTENT);
+                        }
+                        groupDialog.show();
                     } else if (menuIndex == 1) {
+                        uiObj.showUserFiltersDialog(activity, null, null, null, null);
+                    } else if (menuIndex == 2) {
                         onThemeChanged = new Runnable() {
                             run() {
                                 d.reloadDb();
@@ -638,12 +782,12 @@ showStyledMenuDialog(activity) {
                             }
                         };
                         uiObj.showSettingsDialog(activity, onThemeChanged);
-                    } else if (menuIndex == 2) {
+                    } else if (menuIndex == 3) {
                         refreshListView();
                         tasker.showToast("Refreshed");
-                    } else if (menuIndex == 3) {
-                        showClearConfirmation(activity, "Clear Call Log", "Are you sure you want to clear the call log?", "clear_call_log");
                     } else if (menuIndex == 4) {
+                        showClearConfirmation(activity, "Clear Call Log", "Are you sure you want to clear the call log?", "clear_call_log");
+                    } else if (menuIndex == 5) {
                         showClearConfirmation(activity, "Clear Truecaller Log", "Are you sure you want to clear the Truecaller log?", "clear_truecaller_log");
                     }
                 }
@@ -1101,6 +1245,19 @@ Object createListAdapter(Activity activity) {
 }
 
 createListRowView(parent) {
+    // This vertical wrapper holds both the header (top) and the card (bottom)
+    mainWrapper = new LinearLayout(parent.getContext());
+    mainWrapper.setOrientation(LinearLayout.VERTICAL);
+
+    headerText = new TextView(parent.getContext());
+    headerText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+    headerText.setTypeface(null, Typeface.BOLD);
+    headerText.setTextColor(uiObj.getColorInt("primary"));
+    headerParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+    headerParams.setMargins(u.dpToPx(16), u.dpToPx(12), u.dpToPx(16), u.dpToPx(4));
+    headerText.setLayoutParams(headerParams);
+    mainWrapper.addView(headerText);
+
     card = new LinearLayout(parent.getContext());
     card.setOrientation(LinearLayout.HORIZONTAL);
     card.setPadding(u.dpToPx(12), u.dpToPx(12), u.dpToPx(12), u.dpToPx(12));
@@ -1166,19 +1323,38 @@ createListRowView(parent) {
 
     card.addView(infoLayout);
     
-    holder = new Object[6];
+    holder = new Object[8]; // Expanded to hold 8 items
     holder[0] = avatarView;
     holder[1] = nameText;
     holder[2] = numberText;
     holder[3] = timeText;
     holder[4] = noteText;
     holder[5] = spamText;
+    holder[6] = card; 
+    holder[7] = headerText;
     
-    card.setTag(holder);
-    return card;
+    mainWrapper.addView(card);
+    mainWrapper.setTag(holder);
+    return mainWrapper; 
 }
 
 bindListRowView(rowView, entry, activity) {
+    callType = ((Integer) entry[7]).intValue();
+    holder = rowView.getTag();
+    headerText = holder[7];
+    cardView = holder[6];
+
+    // Check if this is a header row (-1 means header)
+    if (callType == -1) {
+        headerText.setText((String) entry[0]);
+        headerText.setVisibility(View.VISIBLE);
+        cardView.setVisibility(View.GONE);
+        return; // Skip processing the rest since it's just a date header
+    } else {
+        headerText.setVisibility(View.GONE);
+        cardView.setVisibility(View.VISIBLE);
+    }
+
     name = entry[0];
     number = entry[1];
     image = entry[2];
@@ -1186,9 +1362,7 @@ bindListRowView(rowView, entry, activity) {
     time = entry[4];
     isVerified = entry[5];
     spamScore = entry[6];
-    callType = entry[7];
 
-    holder = rowView.getTag();
     avatarView = holder[0];
     nameText = holder[1];
     numberText = holder[2];
@@ -1245,22 +1419,19 @@ bindListRowView(rowView, entry, activity) {
 
     final String finalNumber = number;
     final Object[] finalEntry = entry;
-    longPressTriggered = new boolean[]{false};
     
-    rowView.setOnClickListener(new View.OnClickListener() {
+    cardView.setOnClickListener(new View.OnClickListener() {
         onClick(v) {
-            if (!longPressTriggered[0]) {
-                openDetailsView(activity, finalNumber);
-            }
-            longPressTriggered[0] = false;
+            openDetailsView(activity, finalNumber);
         }
     });
 
-    uiObj.setupLongPressHandler(rowView, new Runnable() {
-        run() {
-            longPressTriggered[0] = true;
+    cardView.setOnLongClickListener(new View.OnLongClickListener() {
+        onLongClick(v) {
             showContextMenu(activity, finalEntry);
+            return true;
         }
+        onLongClickUseDefaultHapticFeedback(v) { return true; }
     });
 }
 

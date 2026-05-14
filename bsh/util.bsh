@@ -155,6 +155,7 @@ util() {
         checkAndSet("TC_caller_id_display_type", "Overlay");
         checkAndSet("TC_theme", "Auto Dark Light");
         checkAndSet("TC_call_block_method", "Reject");
+        checkAndSet("TC_call_log_grouping", "Phone");
 
         /* 2. Boolean 'true' defaults */
         String[] trueVars = new String[]{
