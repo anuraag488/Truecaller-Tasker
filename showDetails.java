@@ -37,18 +37,8 @@ cleanup() {
     uiObj.cleanup();
 }
 
-am = context.getSystemService(Context.ACTIVITY_SERVICE);
-appTasks = am.getAppTasks();
-for (int i = 0; i < appTasks.size(); i++) {
-    task = appTasks.get(i);
-    taskInfo = task.getTaskInfo();
-    if (taskInfo != null && taskInfo.taskDescription != null) {
-        label = taskInfo.taskDescription.getLabel();
-        if ("Truecaller-Detail".equals(label)) {
-            task.finishAndRemoveTask();
-        }
-    }
-}
+/* Cleanup existing tasks to avoid stacking */
+uiObj.handleExistingTask("Truecaller-Detail", true);
 
 activityConsumer = new Consumer() {
     accept(activityObj) {
@@ -79,19 +69,8 @@ activityConsumer = new Consumer() {
         activity.setContentView(rootContainer);
         rootContainer.requestApplyInsets();
         
-        am = activity.getSystemService(Context.ACTIVITY_SERVICE);
-        appTasks = am.getAppTasks();
-        activityTaskId = activity.getTaskId();
-        for (int i = 0; i < appTasks.size(); i++) {
-            task = appTasks.get(i);
-            if (task.getTaskInfo().taskId == activityTaskId) {
-                task.setExcludeFromRecents(false);
-                vd.currentAppTask = task;
-                break;
-            }
-        }
-
-        activity.setTaskDescription(new ActivityManager.TaskDescription("Truecaller-Detail"));
+        /* Set Task description for recents menu */
+        vd.currentAppTask = uiObj.setupRecents(activity, "Truecaller-Detail");
         
         activity.getWindow().getDecorView().addOnAttachStateChangeListener(new android.view.View.OnAttachStateChangeListener() {
             onViewAttachedToWindow(v) {}

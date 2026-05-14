@@ -33,18 +33,7 @@ if (u.isValidString(par2)) {
 }
 
 /* Cleanup existing User Filter tasks to avoid stacking */
-am = context.getSystemService(Context.ACTIVITY_SERVICE);
-appTasks = am.getAppTasks();
-for (int i = 0; i < appTasks.size(); i++) {
-    task = appTasks.get(i);
-    taskInfo = task.getTaskInfo();
-    if (taskInfo != null && taskInfo.taskDescription != null) {
-        label = taskInfo.taskDescription.getLabel();
-        if ("Truecaller-Filters".equals(label)) {
-            task.finishAndRemoveTask();
-        }
-    }
-}
+uiObj.handleExistingTask("Truecaller-Filters", true);
 
 activityConsumer = new Consumer() {
     accept(activityObj) {
@@ -60,15 +49,7 @@ activityConsumer = new Consumer() {
         activity.setContentView(rootContainer);
         
         /* Set Task description for recents menu */
-        activityTaskId = activity.getTaskId();
-        for (int i = 0; i < appTasks.size(); i++) {
-            task = appTasks.get(i);
-            if (task.getTaskInfo().taskId == activityTaskId) {
-                task.setExcludeFromRecents(false);
-                break;
-            }
-        }
-        activity.setTaskDescription(new ActivityManager.TaskDescription("Truecaller-Filters"));
+        uiObj.setupRecents(activity, "Truecaller-Filters");
         
         /* Prepare parameters */
         details = null;

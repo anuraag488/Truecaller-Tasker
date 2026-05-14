@@ -2,7 +2,6 @@ import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
-import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
@@ -395,7 +394,7 @@ ui() {
     }
 
     setClip(str) {
-        clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE);
+        clipboard = context.getSystemService(context.CLIPBOARD_SERVICE);
         clip = ClipData.newPlainText("phone", str);
         clipboard.setPrimaryClip(clip);
         tasker.showToast("Copied: " + str);
@@ -1327,6 +1326,45 @@ ui() {
         dialog.setContentView(rootLayout);
         dialog.show();
         return dialog;
+    }
+
+    handleExistingTask(label, killExisting) {
+        am = context.getSystemService(context.ACTIVITY_SERVICE);
+        appTasks = am.getAppTasks();
+        for (int i = 0; i < appTasks.size(); i++) {
+            task = appTasks.get(i);
+            taskInfo = task.getTaskInfo();
+            if (taskInfo != null && taskInfo.taskDescription != null) {
+                taskLabel = taskInfo.taskDescription.getLabel();
+                // Check exact match, or handle Tasker's default fallback name
+                if (label.equals(taskLabel) || (label.equals("Truecaller-List") && "Truecaller-Tasker".equals(taskLabel))) {
+                    if (killExisting) {
+                        task.finishAndRemoveTask();
+                        return null;
+                    } else {
+                        return task;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    setupRecents(activity, label) {
+        am = activity.getSystemService(context.ACTIVITY_SERVICE);
+        appTasks = am.getAppTasks();
+        activityTaskId = activity.getTaskId();
+        currentTask = null;
+        for (int i = 0; i < appTasks.size(); i++) {
+            task = appTasks.get(i);
+            if (task.getTaskInfo().taskId == activityTaskId) {
+                task.setExcludeFromRecents(false);
+                currentTask = task;
+                break;
+            }
+        }
+        activity.setTaskDescription(new android.app.ActivityManager.TaskDescription(label));
+        return currentTask;
     }
 
     cleanup() {
