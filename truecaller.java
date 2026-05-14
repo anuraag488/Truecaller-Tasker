@@ -264,7 +264,7 @@ loadCallLogData(searchQuery) {
     cursor = null;
     try {
         callLogUri = android.net.Uri.parse("content://call_log/calls");
-        projection = new String[]{"date", "number", "normalized_number", "name", "type"};
+        projection = new String[]{"date", "number", "normalized_number", "name", "type", "duration"};
         cursor = context.getContentResolver().query(callLogUri, projection, null, null, "date DESC");
 
         uniqueNumbers = new ArrayList();
@@ -278,6 +278,7 @@ loadCallLogData(searchQuery) {
                 normNumber = cursor.getString(2);
                 callName = cursor.getString(3);
                 callType = cursor.getInt(4);
+                callDuration = cursor.getInt(5);
 
                 if (callNumber == null) callNumber = "";
                 e164 = u.isValidString(normNumber) ? normNumber : u.convertToE164(callNumber);
@@ -285,7 +286,7 @@ loadCallLogData(searchQuery) {
                 if (!seenNumbers.containsKey(e164)) {
                     seenNumbers.put(e164, true);
                     uniqueNumbers.add(e164);
-                    rawCalls.add(new Object[]{callNumber, e164, callName, callDate, callType});
+                    rawCalls.add(new Object[]{callNumber, e164, callName, callDate, callType, new Integer(callDuration)});
                 }
             }
             u.closeQuietly(cursor);
@@ -343,6 +344,7 @@ loadCallLogData(searchQuery) {
             callName = raw[2];
             callDate = raw[3];
             callType = raw[4];
+            callDuration = ((Integer) raw[5]).intValue();
 
             tcData = tcDataMap.get(e164);
             tcName = null;
@@ -400,7 +402,7 @@ loadCallLogData(searchQuery) {
                 entry[1] = e164;
                 entry[2] = image;
                 entry[3] = note;
-                entry[4] = sdf.format(new java.util.Date(callDate));
+                entry[4] = sdf.format(new java.util.Date(callDate)) + u.formatDuration(callDuration);
                 entry[5] = isVerified;
                 entry[6] = spamScore;
                 entry[7] = callType;

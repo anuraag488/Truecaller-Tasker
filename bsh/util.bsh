@@ -67,7 +67,8 @@ util() {
     formatDuration(duration) {
         if (duration <= 0) return "";
         if (duration < 60) return " • " + duration + "s";
-        return " • " + (duration / 60) + "m " + (duration % 60) + "s";
+        if (duration < 3600) return " • " + (duration / 60) + "m " + (duration % 60) + "s";
+        return " • " + (duration / 3600) + "h " + ((duration % 3600) / 60) + "m " + (duration % 60) + "s";
     }
 
     parseAddress(addr) {
