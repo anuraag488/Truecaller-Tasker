@@ -25,6 +25,13 @@
 
 ## Changelog
 
+### 2026-05-15
+* Project require local folder to store script files (defaul /Tasker/truecaller)
+* Activity will stay in Android recents menu
+* Added Dialpad (t9 search is currently performed locally)
+* Added Call log grouping option
+* Many code refactor
+
 ### 2026-05-05
 * Call log and contact photos will load from Android content provider. Dropped call_log and contact_photos table.
 * Show last call type icon in call log
