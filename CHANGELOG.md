@@ -26,7 +26,7 @@
 ## Changelog
 
 ### 2026-05-15
-* Project require local folder to store script files (defaul /Tasker/truecaller)
+* Project require local folder to store script files (default /Tasker/truecaller)
 * Activity will stay in Android recents menu
 * Added Dialpad (t9 search is currently performed locally)
 * Added Call log grouping option
