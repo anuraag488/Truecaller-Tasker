@@ -30,6 +30,7 @@
 * Activity will stay in Android recents menu
 * Added Dialpad (t9 search is currently performed locally)
 * Added Call log grouping option
+* Dropped support for older database migration
 * Many code refactor
 
 ### 2026-05-05
