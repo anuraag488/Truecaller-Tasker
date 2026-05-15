@@ -17,6 +17,7 @@ import okhttp3.Response;
 data() {
     u = util();
     CACHE_EXPIRY_SECONDS = 30 * 86400;
+    httpClient = new OkHttpClient();
     
     // Initialize the DB Helper from dbHelper.bsh
     helper = dbHelper();
@@ -101,7 +102,6 @@ data() {
                 "&countryCode=" + u.getCountryIso() + 
                 "&type=1&encoding=json";
                 
-            httpClient = new OkHttpClient();
             request = new Request.Builder()
                 .url(urlString)
                 .addHeader("Authorization", "Bearer " + installationId)
@@ -171,8 +171,6 @@ data() {
                 u.closeQuietly(cursor);
                 cursor = null;
                 
-                db.execSQL("INSERT OR REPLACE INTO number_map (number, number_e164) VALUES (?, ?)", new String[]{number, numberE164});
-                    
                 values = new android.content.ContentValues();
                 values.put("number_e164", numberE164);
                 values.put("json", jsonResponse);
@@ -356,14 +354,10 @@ data() {
                             dataArray = json.getJSONArray("data");
                             if (dataArray.length() > 0) {
                                 dataObj = dataArray.getJSONObject(0);
-                                if (dataObj.has("countryCode")) countryCode = dataObj.getString("countryCode");
-                                if (dataObj.has("dialingCode")) dialingCode = dataObj.getString("dialingCode");
                                 if (dataObj.has("phones")) {
-                                    phones = dataObj.getJSONArray("phones");
-                                    if (phones.length() > 0) {
-                                        phone = phones.getJSONObject(0);
-                                        if (phone.has("carrier")) carrier = phone.getString("carrier");
-                                    }
+                                    phone = dataObj.getJSONArray("phones").getJSONObject(0);
+                                    if (phone.has("dialingCode")) dialingCode = phone.getString("dialingCode");
+                                    if (phone.has("carrier"))     carrier     = phone.getString("carrier");
                                 }
                             }
                         } catch (Exception e) {}

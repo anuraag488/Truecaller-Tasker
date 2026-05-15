@@ -55,21 +55,26 @@ viewDetail(ui) {
             tasker.showToast("Delete failed: " + e.getMessage());
         }
     }
+
+    deleteSpecificCallLogs(idsList) {
+        try {
+            callLogUri = android.net.Uri.parse("content://call_log/calls");
+            inClause = TextUtils.join(",", idsList);
+            selection = "_id IN (" + inClause + ")";
+            deleted = context.getContentResolver().delete(callLogUri, selection, null);
+            tasker.showToast("Deleted " + deleted + " call(s)");
+        } catch(Exception e) {
+            tasker.showToast("Delete failed: " + e.getMessage());
+        }
+    }
     
     deleteFromDatabase(number) {
         db = null;
         try {
             e164Number = u.convertToE164(number);
             db = d.getWritableDb();
-            db.beginTransaction();
-            try {
-                db.execSQL("DELETE FROM data WHERE number_e164 = ?", new String[]{e164Number});
-                db.execSQL("DELETE FROM number_map WHERE number_e164 = ?", new String[]{e164Number});
-                db.setTransactionSuccessful();
-                tasker.showToast("Deleted from database");
-            } finally {
-                db.endTransaction();
-            }
+            db.execSQL("DELETE FROM data WHERE number_e164 = ?", new String[]{e164Number});
+            tasker.showToast("Deleted from database");
         } catch(Exception e) {
             tasker.showToast("Delete failed: " + e.getMessage());
         } finally {
@@ -327,7 +332,7 @@ viewDetail(ui) {
             if (i > 0) sb.append(" • ");
             sb.append(numberPartsList.get(i));
         }
-        numberPartsText.setText(sb.toString());
+        numberPartsText.setText(TextUtils.join(" • ", numberPartsList));
         numberPartsText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         numberPartsText.setTextColor(ui.getColorInt("on-surface-variant"));
         numberPartsText.setGravity(Gravity.CENTER);
@@ -415,7 +420,7 @@ viewDetail(ui) {
                     companyName = dataObj.getString("companyName");
                     if (u.isValidString(companyName)) {
                         contentLayout.addView(ui.createInfoCard(activity, "Company", companyName, "mw_places_business_center", ui.getThemeColor("surface-variant"), ui.getThemeColor("on-surface")));
-                }
+                    }
                 }
                 if (dataObj.has("internetAddresses")) {
                     internetAddresses = dataObj.getJSONArray("internetAddresses");

@@ -51,6 +51,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -76,7 +77,7 @@ truecallerLogData = new ArrayList();
 searchResults = new ArrayList();
 currentAppTask = null;
 isSearching = false;
-currentSearchId = 0;
+currentSearchId = new AtomicLong(0);
 rootContainer = null;
 callLogTab = null;
 truecallerTab = null;
@@ -136,24 +137,24 @@ String getT9Glob(String query) {
 performLiveSearch(query) {
     uiObj.mainHandler.removeCallbacksAndMessages(null);
     cancelPendingLoads();
-    currentSearchId++;
-    final long thisSearchId = currentSearchId;
     
+    final long thisSearchId = currentSearchId.incrementAndGet(); // atomic increment + capture
+
     if (!u.isValidString(query)) {
         isSearching = false;
         if (mainAdapter != null) mainAdapter.notifyDataSetChanged();
         return;
     }
-    
+
     final String finalQuery = query;
     executorService.submit(new Runnable() {
         run() {
             callLogResults = loadCallLogData(finalQuery);
-            if (thisSearchId != currentSearchId) return;
+            if (thisSearchId != currentSearchId.get()) return;   // atomic read
             truecallerResults = loadTruecallerLogData(finalQuery);
-            if (thisSearchId != currentSearchId) return;
+            if (thisSearchId != currentSearchId.get()) return;
             contactsResults = searchContacts(finalQuery);
-            if (thisSearchId != currentSearchId) return;
+            if (thisSearchId != currentSearchId.get()) return;
             
             allResults = new ArrayList();
             allResults.addAll(callLogResults);
@@ -163,7 +164,7 @@ performLiveSearch(query) {
             
             uiObj.mainHandler.post(new Runnable() {
                 run() {
-                    if (thisSearchId != currentSearchId) return;
+                    if (thisSearchId != currentSearchId.get()) return;
                     searchResults = finalResults;
                     isSearching = true;
                     if (mainAdapter != null) mainAdapter.notifyDataSetChanged();
@@ -274,7 +275,7 @@ loadCallLogData(searchQuery) {
 
     try {
         callLogUri = android.net.Uri.parse("content://call_log/calls");
-        projection = new String[]{"date", "number", "normalized_number", "name", "type", "duration"};
+        projection = new String[]{"_id", "date", "number", "normalized_number", "name", "type", "duration"};
         cursor = context.getContentResolver().query(callLogUri, projection, null, null, "date DESC");
 
         uniqueNumbers = new ArrayList();
@@ -283,18 +284,19 @@ loadCallLogData(searchQuery) {
 
         if (cursor != null) {
             while (cursor.moveToNext()) {
-                callDate = cursor.getLong(0);
-                callNumber = cursor.getString(1);
-                normNumber = cursor.getString(2);
-                callName = cursor.getString(3);
-                callType = cursor.getInt(4);
-                callDuration = cursor.getInt(5);
+                id = cursor.getString(0);
+                callDate = cursor.getLong(1);
+                callNumber = cursor.getString(2);
+                normNumber = cursor.getString(3);
+                callName = cursor.getString(4);
+                callType = cursor.getInt(5);
+                callDuration = cursor.getInt(6);
 
                 if (callNumber == null) callNumber = "";
                 e164 = u.isValidString(normNumber) ? normNumber : u.convertToE164(callNumber);
 
                 if (!uniqueNumbers.contains(e164)) uniqueNumbers.add(e164);
-                rawCalls.add(new Object[]{callNumber, e164, callName, callDate, callType, new Integer(callDuration)});
+                rawCalls.add(new Object[]{id, callNumber, e164, callName, callDate, callType, new Integer(callDuration)});
             }
             u.closeQuietly(cursor);
             cursor = null;
@@ -346,15 +348,17 @@ loadCallLogData(searchQuery) {
 
         lastDateSection = "";
         seenGroupKeys = new HashMap();
+        groupCallIds = new HashMap();
 
         for (int i = 0; i < rawCalls.size(); i++) {
             raw = rawCalls.get(i);
-            callNumber = raw[0];
-            e164 = raw[1];
-            callName = raw[2];
-            callDate = raw[3];
-            callType = raw[4];
-            callDuration = ((Integer) raw[5]).intValue();
+            id = (String) raw[0];
+            callNumber = raw[1];
+            e164 = raw[2];
+            callName = raw[3];
+            callDate = raw[4];
+            callType = raw[5];
+            callDuration = ((Integer) raw[6]).intValue();
             dateSection = formatDateSection(callDate);
 
             tcData = tcDataMap.get(e164);
@@ -403,7 +407,16 @@ loadCallLogData(searchQuery) {
                 if (groupByPhone) groupKey += e164 + "|";
             }
 
-            if (seenGroupKeys.containsKey(groupKey)) continue;
+            // Add ID to the group list and stop if we've already rendered this group
+            if (seenGroupKeys.containsKey(groupKey)) {
+                ((ArrayList) groupCallIds.get(groupKey)).add(id);
+                continue;
+            }
+            
+            // First time seeing this group, create the ID list
+            ids = new ArrayList();
+            ids.add(id);
+            groupCallIds.put(groupKey, ids);
             seenGroupKeys.put(groupKey, true);
 
             matches = true;
@@ -425,14 +438,14 @@ loadCallLogData(searchQuery) {
 
             if (matches) {
                 if (showHeaders && !dateSection.equals(lastDateSection)) {
-                    headerEntry = new Object[8];
+                    headerEntry = new Object[9];
                     headerEntry[0] = dateSection;
                     headerEntry[7] = -1; // -1 denotes a header row
                     list.add(headerEntry);
                     lastDateSection = dateSection;
                 }
 
-                entry = new Object[8];
+                entry = new Object[9]; // Increased array size to 9
                 entry[0] = formattedName;
                 entry[1] = e164;
                 entry[2] = image;
@@ -441,6 +454,7 @@ loadCallLogData(searchQuery) {
                 entry[5] = isVerified;
                 entry[6] = spamScore;
                 entry[7] = callType;
+                entry[8] = groupCallIds.get(groupKey); // Store the ArrayList of IDs!
                 list.add(entry);
             }
         }
@@ -488,7 +502,7 @@ loadTruecallerLogData(searchQuery) {
         
         cursor = db.rawQuery(sb.toString(), queryArgs);
         while (cursor.moveToNext()) {
-            entry = new Object[8];
+            entry = new Object[9];
             entry[0] = cursor.getString(0);
             entry[1] = cursor.getString(1);
             
@@ -544,7 +558,7 @@ searchContacts(searchQuery) {
         }
 
         if (matches) {
-            entry = new Object[8];
+            entry = new Object[9];
             entry[0] = name;
             entry[1] = num;
             entry[2] = photo;
@@ -553,6 +567,7 @@ searchContacts(searchQuery) {
             entry[5] = false;
             entry[6] = 0;
             entry[7] = 0;
+            entry[8] = null;
             results.add(entry);
         }
     }
@@ -615,7 +630,6 @@ showClearConfirmation(activity, title, message, taskParam) {
                     tasker.showToast("Feature not added");
                 } else if ("clear_truecaller_log".equals(taskParam)) {
                     db.execSQL("DELETE FROM data");
-                    db.execSQL("DELETE FROM number_map");
                     tasker.showToast("Truecaller log cleared");
                 }
                 uiObj.mainHandler.postDelayed(new Runnable() {
@@ -865,11 +879,16 @@ showContextMenu(activity, entry) {
                             run() {
                                 try {
                                     if (currentTab.equals("calllog")) {
-                                        vd.deleteFromCallLog(number);
+                                        idsList = (ArrayList) entry[8];
+                                        if (idsList != null && !idsList.isEmpty()) {
+                                            vd.deleteSpecificCallLogs(idsList);
+                                        } else {
+                                            vd.deleteFromCallLog(number); // Fallback
+                                        }
                                     } else {
                                         vd.deleteFromDatabase(number);
                                     }
-                                    removeCardFromUi(number);
+                                    removeCardFromUi(entry);
                                 } catch(Exception e) {
                                     tasker.showToast("Delete failed: " + e.getMessage());
                                 }
@@ -1140,18 +1159,33 @@ refreshListView() {
     }
 }
 
-void removeCardFromUi(String number) {
+void removeCardFromUi(Object[] targetEntry) {
     uiObj.mainHandler.post(new Runnable() {
         run() {
             if (isSearching) dataList = searchResults;
             else if (currentTab.equals("calllog")) dataList = callLogData;
             else dataList = truecallerLogData;
 
-            for (int i = 0; i < dataList.size(); i++) {
-                entry = dataList.get(i);
-                if (entry[1].equals(number)) {
-                    dataList.remove(i);
-                    break;
+            index = dataList.indexOf(targetEntry);
+            if (index != -1) {
+                dataList.remove(index);
+            
+                boolean prevIsHeader = false;
+                int headerIndex = -1;
+                if (index > 0) {
+                    prevItem = dataList.get(index - 1);
+                    if (((Integer) prevItem[7]).intValue() == -1) {
+                        prevIsHeader = true;
+                        headerIndex = index - 1;
+                    }
+                }
+            
+                if (prevIsHeader) {
+                    boolean nextIsHeaderOrEnd = (index >= dataList.size()) ||
+                        (((Integer) dataList.get(index)[7]).intValue() == -1);
+                    if (nextIsHeaderOrEnd) {
+                        dataList.remove(headerIndex);
+                    }
                 }
             }
             if (mainAdapter != null) mainAdapter.notifyDataSetChanged();
@@ -1160,12 +1194,22 @@ void removeCardFromUi(String number) {
 }
 
 void openDetailsView(Activity activity, String number) {
-  vd.isCallLog = currentTab.equals("calllog");
-  vd.onDeleted = new Runnable() { run() { removeCardFromUi(number); } };
-  vd.onClose = new Runnable() { run() { refreshListView(); } };
-  
-  detailView = vd.createDetailView(activity, number);
-  rootContainer.addView(detailView);
+    vd.isCallLog = currentTab.equals("calllog");
+    
+    vd.onDeleted = new Runnable() { 
+        run() { 
+            refreshListView(); 
+        } 
+    };
+    
+    vd.onClose = new Runnable() { 
+        run() { 
+            refreshListView(); 
+        } 
+    };
+    
+    detailView = vd.createDetailView(activity, number);
+    rootContainer.addView(detailView);
 }
 
 void loadTabData(String tab) {
@@ -1221,6 +1265,17 @@ Object createListAdapter(Activity activity) {
                 return (long) pos;
             }
 
+            if (methodName.equals("areAllItemsEnabled")) {
+                return false;
+            }
+
+            if (methodName.equals("isEnabled")) {
+                int pos = ((Integer)args[0]).intValue();
+                Object[] entry = dataList.get(pos);
+                int callType = ((Integer) entry[7]).intValue();
+                return callType != -1; // Return false (disabled) if it's a header
+            }
+
             if (methodName.equals("getView")) {
                 int position = ((Integer)args[0]).intValue();
                 View convertView = (View)args[1];
@@ -1246,8 +1301,8 @@ Object createListAdapter(Activity activity) {
 
 createListRowView(parent) {
     // This vertical wrapper holds both the header (top) and the card (bottom)
-    mainWrapper = new LinearLayout(parent.getContext());
-    mainWrapper.setOrientation(LinearLayout.VERTICAL);
+    rowWrapper = new LinearLayout(parent.getContext());
+    rowWrapper.setOrientation(LinearLayout.VERTICAL);
 
     headerText = new TextView(parent.getContext());
     headerText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
@@ -1256,7 +1311,7 @@ createListRowView(parent) {
     headerParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
     headerParams.setMargins(u.dpToPx(16), u.dpToPx(12), u.dpToPx(16), u.dpToPx(4));
     headerText.setLayoutParams(headerParams);
-    mainWrapper.addView(headerText);
+    rowWrapper.addView(headerText);
 
     card = new LinearLayout(parent.getContext());
     card.setOrientation(LinearLayout.HORIZONTAL);
@@ -1333,9 +1388,9 @@ createListRowView(parent) {
     holder[6] = card; 
     holder[7] = headerText;
     
-    mainWrapper.addView(card);
-    mainWrapper.setTag(holder);
-    return mainWrapper; 
+    rowWrapper.addView(card);
+    rowWrapper.setTag(holder);
+    return rowWrapper; 
 }
 
 bindListRowView(rowView, entry, activity) {
