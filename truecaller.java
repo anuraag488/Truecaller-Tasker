@@ -71,37 +71,6 @@ if (existingTask != null) {
     return;
 }
 
-void updateSystemBars(Activity activity) {
-    window = activity.getWindow();
-    window.addFlags(0x80000000); // FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS
-    window.setStatusBarColor(uiObj.getColorInt("surface"));
-    window.setNavigationBarColor(uiObj.getColorInt("surface-variant"));
-    
-    decorView = window.getDecorView();
-    flags = decorView.getSystemUiVisibility();
-    
-    // Check if the surface color is light or dark
-    surfaceColor = uiObj.getColorInt("surface");
-    r = android.graphics.Color.red(surfaceColor);
-    g = android.graphics.Color.green(surfaceColor);
-    b = android.graphics.Color.blue(surfaceColor);
-    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0;
-    
-    // Switch icon colors depending on background luminance
-    if (luminance > 0.5) {
-        flags |= 8192; // SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-        if (android.os.Build.VERSION.SDK_INT >= 26) {
-            flags |= 16; // SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-        }
-    } else {
-        flags &= ~8192;
-        if (android.os.Build.VERSION.SDK_INT >= 26) {
-            flags &= ~16;
-        }
-    }
-    decorView.setSystemUiVisibility(flags);
-}
-
 currentTab = "calllog";
 callLogData = new ArrayList();
 truecallerLogData = new ArrayList();
