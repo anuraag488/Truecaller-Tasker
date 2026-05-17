@@ -71,6 +71,37 @@ if (existingTask != null) {
     return;
 }
 
+void updateSystemBars(Activity activity) {
+    window = activity.getWindow();
+    window.addFlags(0x80000000); // FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS
+    window.setStatusBarColor(uiObj.getColorInt("surface"));
+    window.setNavigationBarColor(uiObj.getColorInt("surface-variant"));
+    
+    decorView = window.getDecorView();
+    flags = decorView.getSystemUiVisibility();
+    
+    // Check if the surface color is light or dark
+    surfaceColor = uiObj.getColorInt("surface");
+    r = android.graphics.Color.red(surfaceColor);
+    g = android.graphics.Color.green(surfaceColor);
+    b = android.graphics.Color.blue(surfaceColor);
+    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0;
+    
+    // Switch icon colors depending on background luminance
+    if (luminance > 0.5) {
+        flags |= 8192; // SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            flags |= 16; // SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+        }
+    } else {
+        flags &= ~8192;
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            flags &= ~16;
+        }
+    }
+    decorView.setSystemUiVisibility(flags);
+}
+
 currentTab = "calllog";
 callLogData = new ArrayList();
 truecallerLogData = new ArrayList();
@@ -85,6 +116,7 @@ tabIndicator = null;
 mainListView = null;
 mainWrapper = null;
 searchBox = null;
+mainDialog = null;
 detailOverlay = null;
 dialpadView = null;
 fab = null;
@@ -788,6 +820,10 @@ showStyledMenuDialog(activity) {
                                 
                                 uiObj.mainHandler.post(new Runnable() {
                                     run() {
+                                        // Update dialog background to new theme
+                                        if (mainDialog != null) {
+                                            mainDialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(uiObj.getColorInt("surface-variant")));
+                                        }
                                         rootContainer.removeAllViews();
                                         listView = createListView(activity);
                                         rootContainer.addView(listView);
@@ -1817,43 +1853,32 @@ createListView(activity) {
     mainWrapper.setFocusableInTouchMode(true);
     mainWrapper.requestFocus();
     
-    backKeyListener = new View.OnKeyListener() {
-        onKey(v, keyCode, event) {
-            if (keyCode == android.view.KeyEvent.KEYCODE_BACK && event.getAction() == android.view.KeyEvent.ACTION_UP) {
-                if (dialpadView != null && dialpadView.getVisibility() == View.VISIBLE) {
-                    dialpadView.setVisibility(View.GONE);
-                    if (numberDisplay != null) numberDisplay.clearFocus();
-                    if (fab != null) fab.setVisibility(View.VISIBLE);
-                    if (mainWrapper != null) mainWrapper.requestFocus();
-                    return true;
-                } else if (isSearching || (searchBox != null && !searchBox.getText().toString().trim().isEmpty()) || (numberDisplay != null && !numberDisplay.getText().toString().isEmpty())) {
-                    if (searchBox != null) {
-                        searchBox.setText("");
-                        searchBox.clearFocus();
+    if (mainDialog != null) {
+        mainDialog.setOnKeyListener(new android.content.DialogInterface.OnKeyListener() {
+            onKey(dialogInterface, keyCode, event) {
+                if (keyCode == android.view.KeyEvent.KEYCODE_BACK && event.getAction() == android.view.KeyEvent.ACTION_UP) {
+                    if (dialpadView != null && dialpadView.getVisibility() == View.VISIBLE) {
+                        dialpadView.setVisibility(View.GONE);
+                        if (numberDisplay != null) numberDisplay.clearFocus();
+                        if (fab != null) fab.setVisibility(View.VISIBLE);
+                        if (mainWrapper != null) mainWrapper.requestFocus();
+                        return true;
+                    } else if (isSearching || (searchBox != null && !searchBox.getText().toString().trim().isEmpty()) || (numberDisplay != null && !numberDisplay.getText().toString().isEmpty())) {
+                        if (searchBox != null) {
+                            searchBox.setText("");
+                            searchBox.clearFocus();
+                        }
+                        if (numberDisplay != null) numberDisplay.setText("");
+                        performLiveSearch(""); 
+                        if (mainWrapper != null) mainWrapper.requestFocus();
+                        return true;
                     }
-                    if (numberDisplay != null) numberDisplay.setText("");
-                    performLiveSearch(""); 
-                    if (mainWrapper != null) mainWrapper.requestFocus();
-                    return true;
-                } else {
-                    cleanup();
-                    if (currentAppTask != null) {
-                        currentAppTask.finishAndRemoveTask();
-                    } else {
-                        activity.finish();
-                    }
-                    return true;
+                    return false; // Let the dialog dismiss itself
                 }
+                return false;
             }
-            return false;
-        }
-    };
-    
-    mainWrapper.setOnKeyListener(backKeyListener);
-    if (searchBox != null) searchBox.setOnKeyListener(backKeyListener);
-    if (mainListView != null) mainListView.setOnKeyListener(backKeyListener);
-    if (dialpadView != null) dialpadView.setOnKeyListener(backKeyListener);
-    if (numberDisplay != null) numberDisplay.setOnKeyListener(backKeyListener);
+        });
+    }
     
     callLogTab.performClick();
     return mainWrapper;
@@ -1862,9 +1887,11 @@ createListView(activity) {
 activityConsumer = new Consumer() {
     accept(activityObj) {
         activity = activityObj;
-        activity.getWindow().setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
-        activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
-        activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
+        
+        // Wrap the entire UI in a full-screen Dialog to fix System Bar colors
+        mainDialog = new android.app.Dialog(activity, android.R.style.Theme_DeviceDefault_NoActionBar);
+        mainDialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(uiObj.getColorInt("surface-variant")));
+        mainDialog.getWindow().setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
         
         rootContainer = new FrameLayout(activity);
         
@@ -1885,18 +1912,23 @@ activityConsumer = new Consumer() {
         listView = createListView(activity);
         rootContainer.addView(listView);
         
-        activity.setContentView(rootContainer);
-        rootContainer.requestApplyInsets();
+        mainDialog.setContentView(rootContainer);
         
         currentAppTask = uiObj.setupRecents(activity, taskDescription);
         
-        activity.getWindow().getDecorView().addOnAttachStateChangeListener(new android.view.View.OnAttachStateChangeListener() {
-            onViewAttachedToWindow(v) {}
-            onViewDetachedFromWindow(v) {
+        mainDialog.setOnDismissListener(new android.content.DialogInterface.OnDismissListener() {
+            onDismiss(android.content.DialogInterface dAlert) {
                 u.logToFile("closing truecaller list view");
                 cleanup();
+                if (currentAppTask != null) {
+                    currentAppTask.finishAndRemoveTask();
+                } else {
+                    activity.finish();
+                }
             }
         });
+        
+        mainDialog.show();
     }
 };
 
