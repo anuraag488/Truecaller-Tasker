@@ -1826,13 +1826,22 @@ createListView(activity) {
         mainDialog.setOnKeyListener(new android.content.DialogInterface.OnKeyListener() {
             onKey(dialogInterface, keyCode, event) {
                 if (keyCode == android.view.KeyEvent.KEYCODE_BACK && event.getAction() == android.view.KeyEvent.ACTION_UP) {
-                    if (dialpadView != null && dialpadView.getVisibility() == View.VISIBLE) {
+                    
+                    // 1. Check if the detail view is currently open
+                    if (vd != null && vd.detailOverlay != null && vd.detailOverlay.getParent() != null) {
+                        vd.closeDetailsView(activity, false);
+                        return true;
+                    } 
+                    // 2. Check if the dialpad is open
+                    else if (dialpadView != null && dialpadView.getVisibility() == View.VISIBLE) {
                         dialpadView.setVisibility(View.GONE);
                         if (numberDisplay != null) numberDisplay.clearFocus();
                         if (fab != null) fab.setVisibility(View.VISIBLE);
                         if (mainWrapper != null) mainWrapper.requestFocus();
                         return true;
-                    } else if (isSearching || (searchBox != null && !searchBox.getText().toString().trim().isEmpty()) || (numberDisplay != null && !numberDisplay.getText().toString().isEmpty())) {
+                    } 
+                    // 3. Check if search is active
+                    else if (isSearching || (searchBox != null && !searchBox.getText().toString().trim().isEmpty()) || (numberDisplay != null && !numberDisplay.getText().toString().isEmpty())) {
                         if (searchBox != null) {
                             searchBox.setText("");
                             searchBox.clearFocus();
