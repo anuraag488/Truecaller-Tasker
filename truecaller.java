@@ -158,6 +158,26 @@ performLiveSearch(query) {
             if (thisSearchId != currentSearchId.get()) return;
             
             allResults = new ArrayList();
+
+            // IDEA 3: Inject Truecaller Search row if query is a >3 digit number
+            if (finalQuery.matches("[0-9+*#]+") && finalQuery.length() >= 3) {
+                Object[] tcDetails = d.loadNumberDetails(finalQuery);
+                // Only show the button if data doesn't exist or is older than 30 days
+                if (tcDetails == null || d.needsUpdate(tcDetails)) {
+                    Object[] searchEntry = new Object[9];
+                    searchEntry[0] = "Search Truecaller";
+                    searchEntry[1] = finalQuery;
+                    searchEntry[2] = null; 
+                    searchEntry[3] = "Tap to fetch details from Truecaller"; 
+                    searchEntry[4] = ""; 
+                    searchEntry[5] = false; 
+                    searchEntry[6] = 0; 
+                    searchEntry[7] = -2; // -2 acts as a special ID for the Search row
+                    searchEntry[8] = null;
+                    allResults.add(searchEntry);
+                }
+            }
+
             allResults.addAll(callLogResults);
             allResults.addAll(truecallerResults);
             allResults.addAll(contactsResults);
@@ -1404,7 +1424,7 @@ bindListRowView(rowView, entry, activity) {
     headerText = holder[7];
     cardView = holder[6];
 
-    // Check if this is a header row (-1 means header)
+    // Check if this is a header row (-1 means date header)
     if (callType == -1) {
         headerText.setText((String) entry[0]);
         headerText.setVisibility(View.VISIBLE);
@@ -1415,6 +1435,111 @@ bindListRowView(rowView, entry, activity) {
         cardView.setVisibility(View.VISIBLE);
     }
 
+    avatarView = holder[0];
+    nameText = holder[1];
+    numberText = holder[2];
+    timeText = holder[3];
+    noteText = holder[4];
+    spamText = holder[5];
+
+    // Check if this is our special Truecaller Search row (-2)
+    if (callType == -2) {
+        nameText.setText((String) entry[0]);
+        nameText.setTextColor(uiObj.getColorInt("primary")); // Color it primary to look like an action
+        numberText.setText((String) entry[1]);
+        timeText.setText("");
+        timeText.setCompoundDrawables(null, null, null, null);
+        
+        noteText.setText((String) entry[3]);
+        noteText.setVisibility(View.VISIBLE);
+        spamText.setVisibility(View.GONE);
+        
+        uiObj.cancelImageLoad(avatarView);
+        avatarView.setImageBitmap(uiObj.createInitialBitmap("Search", 48));
+        
+        final String searchNumber = (String) entry[1];
+        final Object[] currentEntry = entry;
+        
+        cardView.setOnClickListener(new View.OnClickListener() {
+            onClick(v) {
+                // Prevent duplicate clicks if already fetching
+                if ("Fetching...".equals(currentEntry[3])) return;
+
+                // Collapse dialpad smoothly
+                if (dialpadView != null && dialpadView.getVisibility() == View.VISIBLE) {
+                    dialpadView.setVisibility(View.GONE);
+                    if (fab != null) fab.setVisibility(View.VISIBLE);
+                }
+                
+                // Show inline loading state
+                currentEntry[3] = "Fetching...";
+                if (mainAdapter != null) mainAdapter.notifyDataSetChanged();
+
+                executorService.submit(new Runnable() {
+                    run() {
+                        try {
+                            Object[] fetchedDetails = d.fetchFromTruecaller(searchNumber);
+                            
+                            uiObj.mainHandler.post(new Runnable() {
+                                run() {
+                                    if (fetchedDetails != null) {
+                                        // Update the entry in-place to morph into a normal Truecaller Log item
+                                        String tcName = (String) fetchedDetails[0];
+                                        int spamScore = ((Integer) fetchedDetails[2]).intValue();
+                                        boolean isVerified = ((Boolean) fetchedDetails[3]).booleanValue();
+                                        String image = (String) fetchedDetails[4];
+                                        String note = (String) fetchedDetails[5];
+                                        
+                                        String formattedName = tcName != null ? tcName : searchNumber;
+                                        if (isVerified) formattedName += " ✅";
+                                        else if (spamScore > 0) formattedName += " 🔴";
+                                        
+                                        currentEntry[0] = formattedName;
+                                        currentEntry[1] = searchNumber;
+                                        currentEntry[2] = image;
+                                        currentEntry[3] = note;
+                                        // Set timestamp to right now
+                                        currentEntry[4] = new java.text.SimpleDateFormat("dd-MM-yyyy HH:mm:ss").format(new java.util.Date());
+                                        currentEntry[5] = isVerified;
+                                        currentEntry[6] = spamScore;
+                                        currentEntry[7] = 0; // Morph into standard Truecaller log row!
+                                        
+                                        // Mirror number to search box without causing a full list reload
+                                        if (searchBox != null) {
+                                            searchBox.setText(searchNumber);
+                                            searchBox.clearFocus();
+                                        }
+
+                                        if (mainAdapter != null) mainAdapter.notifyDataSetChanged();
+                                    } else {
+                                        currentEntry[3] = "Failed to fetch. Tap to retry.";
+                                        if (mainAdapter != null) mainAdapter.notifyDataSetChanged();
+                                    }
+                                }
+                            });
+                        } catch (Exception e) {
+                            uiObj.mainHandler.post(new Runnable() {
+                                run() {
+                                    currentEntry[3] = "Error: " + e.getMessage() + ". Tap to retry.";
+                                    if (mainAdapter != null) mainAdapter.notifyDataSetChanged();
+                                }
+                            });
+                        }
+                    }
+                });
+            }
+        });
+        
+        // Remove context menu for the search row
+        cardView.setOnLongClickListener(new View.OnLongClickListener() {
+            onLongClick(v) { return true; }
+            onLongClickUseDefaultHapticFeedback(v) { return false; }
+        });
+        return;
+    }
+
+    nameText.setTextColor(uiObj.getColorInt("on-surface")); // Ensure regular rows are standard color
+
     name = entry[0];
     number = entry[1];
     image = entry[2];
@@ -1422,13 +1547,6 @@ bindListRowView(rowView, entry, activity) {
     time = entry[4];
     isVerified = entry[5];
     spamScore = entry[6];
-
-    avatarView = holder[0];
-    nameText = holder[1];
-    numberText = holder[2];
-    timeText = holder[3];
-    noteText = holder[4];
-    spamText = holder[5];
 
     uiObj.cancelImageLoad(avatarView);
 
