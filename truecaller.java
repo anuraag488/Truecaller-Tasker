@@ -8,6 +8,9 @@ importCommands(BASE_BSH);
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.Dialog;
+import android.app.KeyguardManager;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -1984,11 +1987,57 @@ activityConsumer = new Consumer() {
     accept(activityObj) {
         activity = activityObj;
         
-        // Wrap the entire UI in a full-screen Dialog to fix System Bar colors
+        // 1. Initialize the Dialog FIRST so we can apply flags to it
         mainDialog = new android.app.Dialog(activity, android.R.style.Theme_DeviceDefault_NoActionBar);
         mainDialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(uiObj.getColorInt("surface-variant")));
         mainDialog.getWindow().setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
         
+        // --- LOCKSCREEN LOGIC START ---
+        km = activity.getSystemService(Context.KEYGUARD_SERVICE);
+        isLocked = km != null && km.isKeyguardLocked();
+
+        if (isLocked) {
+            // A. Apply lockscreen flags to the Activity
+            if (android.os.Build.VERSION.SDK_INT >= 27) {
+                activity.setShowWhenLocked(true);
+                activity.setTurnScreenOn(true);
+            } else {
+                activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
+            }
+            
+            // B. Apply lockscreen flags to the Dialog Window (CRITICAL FIX)
+            mainDialog.getWindow().addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED |
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON |
+                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+            );
+
+            // C. Create receiver to drop privileges if user locks the screen again
+            receiverImpl = new ClassImplementation() {
+                run(Callable superCaller, String methodName, Object[] args) {
+                    if ("onReceive".equals(methodName)) {
+                        intent = args[1];
+                        if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
+                            // Drop lockscreen privileges from both Activity and Dialog
+                            if (android.os.Build.VERSION.SDK_INT >= 27) {
+                                activity.setShowWhenLocked(false);
+                            }
+                            activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED);
+                            mainDialog.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED);
+                        }
+                        return null;
+                    }
+                    return superCaller.call();
+                }
+            };
+            
+            // Register receiver and save it to the view's tag for cleanup
+            screenOffReceiver = tasker.implementClass(BroadcastReceiver.class, receiverImpl);
+            activity.registerReceiver(screenOffReceiver, new IntentFilter(Intent.ACTION_SCREEN_OFF));
+            activity.getWindow().getDecorView().setTag(screenOffReceiver);
+        }
+        // --- LOCKSCREEN LOGIC END ---
+
         rootContainer = new FrameLayout(activity);
         
         rootContainer.setOnApplyWindowInsetsListener(new android.view.View.OnApplyWindowInsetsListener() {
@@ -2015,6 +2064,13 @@ activityConsumer = new Consumer() {
         mainDialog.setOnDismissListener(new android.content.DialogInterface.OnDismissListener() {
             onDismiss(android.content.DialogInterface dAlert) {
                 u.logToFile("closing truecaller list view");
+                
+                // Unregister the screen off receiver if it exists
+                rec = activity.getWindow().getDecorView().getTag();
+                if (rec != null) {
+                    try { activity.unregisterReceiver(rec); } catch (Exception e) {}
+                }
+                
                 cleanup();
                 if (currentAppTask != null) {
                     currentAppTask.finishAndRemoveTask();
