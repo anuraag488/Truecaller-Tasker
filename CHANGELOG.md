@@ -25,6 +25,12 @@
 
 ## Changelog
 
+### 2026-06-10
+* Activity can show on lockscreen
+
+### 2026-06-01
+* Added method to search using Truecaller database when searching using t9 dialer.
+
 ### 2026-05-15
 * Project require local folder to store script files (default /Tasker/truecaller)
 * Activity will stay in Android recents menu
