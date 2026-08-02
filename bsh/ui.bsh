@@ -787,10 +787,9 @@ ui() {
                     tv.setBackgroundColor(getColorInt("surface"));
                     views[i] = tv;
                     container.addView(tv);
-                    capturedText = (String) types.get(i);
                     tv.setOnClickListener(new View.OnClickListener() {
                         onClick(View v2) {
-                            typeDisplay.setText(capturedText);
+                            typeDisplay.setText(((TextView)v2).getText().toString());
                             ((android.app.AlertDialog)dialogRef[0]).dismiss();
                         }
                     });
@@ -868,17 +867,17 @@ ui() {
                     tv.setBackgroundColor(getColorInt("surface"));
                     views[i] = tv;
                     container.addView(tv);
-                    capturedText = (String) fields.get(i);
                     tv.setOnClickListener(new View.OnClickListener() {
                         onClick(View v2) {
-                            fieldDisplay.setText(capturedText);
+                            selectedText = ((TextView)v2).getText().toString();
+                            fieldDisplay.setText(selectedText);
                             filterNumber = (String) state.get("filterNumber");
                             filterName = (String) state.get("filterName");
                             parsedDetails = (Object[]) state.get("details");
                             
-                            if (capturedText.equals("number") && filterNumber != null && !filterNumber.isEmpty()) {
+                            if (selectedText.equals("number") && filterNumber != null && !filterNumber.isEmpty()) {
                                 valueInput.setText(filterNumber);
-                            } else if (capturedText.equals("name") && filterName != null && !filterName.isEmpty()) {
+                            } else if (selectedText.equals("name") && filterName != null && !filterName.isEmpty()) {
                                 valueInput.setText(filterName);
                             } else if (parsedDetails != null) {
                                 try {
@@ -886,11 +885,11 @@ ui() {
                                     dataArray = json.getJSONArray("data");
                                     if (dataArray.length() > 0) {
                                         dataObj = dataArray.getJSONObject(0);
-                                        if (capturedText.equals("country code") && dataObj.has("countryCode")) {
+                                        if (selectedText.equals("country code") && dataObj.has("countryCode")) {
                                             valueInput.setText(dataObj.getString("countryCode"));
-                                        } else if (capturedText.equals("dialing code") && dataObj.has("dialingCode")) {
+                                        } else if (selectedText.equals("dialing code") && dataObj.has("dialingCode")) {
                                             valueInput.setText(dataObj.getString("dialingCode"));
-                                        } else if (capturedText.equals("carrier") && dataObj.has("phones")) {
+                                        } else if (selectedText.equals("carrier") && dataObj.has("phones")) {
                                             phones = dataObj.getJSONArray("phones");
                                             if (phones.length() > 0 && phones.getJSONObject(0).has("carrier")) {
                                                 valueInput.setText(phones.getJSONObject(0).getString("carrier"));
@@ -956,10 +955,9 @@ ui() {
                     tv.setBackgroundColor(getColorInt("surface"));
                     views[i] = tv;
                     container.addView(tv);
-                    capturedText = (String) matches.get(i);
                     tv.setOnClickListener(new View.OnClickListener() {
                         onClick(View v2) {
-                            matchDisplay.setText(capturedText);
+                            matchDisplay.setText(((TextView)v2).getText().toString());
                             ((android.app.AlertDialog)dialogRef[0]).dismiss();
                         }
                     });
