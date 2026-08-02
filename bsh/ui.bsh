@@ -1054,7 +1054,8 @@ ui() {
                 else if (selectedMatch.equals("starts with")) formattedValue = enteredValue + "*";
                 else if (selectedMatch.equals("ends with")) formattedValue = "*" + enteredValue;
                 
-                if (selectedField.equals("number") && !enteredValue.contains("*")) {
+                // ONLY apply E164 formatting if it is an exact match!
+                if (selectedField.equals("number") && selectedMatch.equals("matches") && !enteredValue.contains("*")) {
                     formattedValue = u.convertToE164(enteredValue);
                 }
                 
