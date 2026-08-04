@@ -25,6 +25,11 @@
 
 ## Changelog
 
+### 2026-08-03
+* Added option to allow repeat callers
+* Added option to allow dialed numbers
+* Fixed issue with Filter UI Dropdown Selection Fix
+
 ### 2026-06-10
 * Activity can show on lockscreen
 
