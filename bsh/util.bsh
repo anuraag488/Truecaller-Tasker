@@ -151,6 +151,11 @@ util() {
         checkAndSet("TC_theme", "Auto Dark Light");
         checkAndSet("TC_call_block_method", "Reject");
         checkAndSet("TC_call_log_grouping", "Phone");
+        checkAndSet("TC_repeat_caller_times", "2");
+        checkAndSet("TC_repeat_caller_min_interval", "0");
+        checkAndSet("TC_repeat_caller_max_interval", "5");
+        checkAndSet("TC_dialed_numbers_time_range", "All Time");
+        checkAndSet("TC_dialed_numbers_days", "7");
 
         /* 2. Boolean 'true' defaults */
         String[] trueVars = new String[]{
@@ -167,7 +172,8 @@ util() {
             "TC_monitor_clipboard", "TC_enable_for_sms", "TC_enable_for_whatsapp_calls",
             "TC_enable_for_whatsapp_msgs", "TC_block_all_calls", "TC_block_unsaved_numbers",
             "TC_spam_calls_block_top_spammers", "TC_spam_calls_block_additional",
-            "TC_spam_calls_early_detection", "TC_private_calls_block", "TC_debug_enabled"
+            "TC_spam_calls_early_detection", "TC_private_calls_block", "TC_debug_enabled", 
+            "TC_allow_repeat_callers", "TC_allow_dialed_numbers"
         };
         for (int i = 0; i < falseVars.length; i++) {
             checkAndSetBool(falseVars[i], "false");

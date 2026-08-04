@@ -2690,6 +2690,317 @@ ui() {
             "Blocks calls from hidden/private numbers.",
             createThemedCheckbox(activity, "TC_private_calls_block", false)
         ));
+
+        // --- START REPEAT CALLERS CARD ---
+        repeatCard = new LinearLayout(activity);
+        repeatCard.setOrientation(LinearLayout.VERTICAL);
+        repeatCard.setBackground(createCardBackground(getThemeColor("surface"), 16));
+        rcParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rcParams.setMargins(u.dpToPx(8), u.dpToPx(8), u.dpToPx(8), u.dpToPx(8));
+        repeatCard.setLayoutParams(rcParams);
+        
+        rcHeader = new LinearLayout(activity);
+        rcHeader.setOrientation(LinearLayout.HORIZONTAL);
+        rcHeader.setGravity(Gravity.CENTER_VERTICAL);
+        rcHeader.setPadding(u.dpToPx(16), u.dpToPx(12), u.dpToPx(16), u.dpToPx(12));
+        
+        rcTextContainer = new LinearLayout(activity);
+        rcTextContainer.setOrientation(LinearLayout.VERTICAL);
+        rcTextContainer.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+        
+        rcLabel = new TextView(activity);
+        rcLabel.setText("Allow Repeat Callers");
+        rcLabel.setTextColor(getColorInt("on-surface"));
+        rcLabel.setTextSize(16);
+        rcTextContainer.addView(rcLabel);
+        
+        rcDesc = new TextView(activity);
+        rcDesc.setText("Let a blocked number ring if they call repeatedly.");
+        rcDesc.setTextColor(getColorInt("on-surface-variant"));
+        rcDesc.setTextSize(12);
+        rcDescParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rcDescParams.topMargin = u.dpToPx(4);
+        rcDesc.setLayoutParams(rcDescParams);
+        rcTextContainer.addView(rcDesc);
+        
+        rcCheckbox = new android.widget.CheckBox(activity);
+        rcCheckbox.setButtonDrawable(null);
+        checkedRc = getDrawable(activity, "mw_toggle_check_box");
+        if (checkedRc != null) checkedRc.setTint(getColorInt("primary"));
+        uncheckedRc = getDrawable(activity, "mw_toggle_check_box_outline_blank");
+        if (uncheckedRc != null) uncheckedRc.setTint(getColorInt("outline"));
+        
+        rcSaved = tasker.getVariable("TC_allow_repeat_callers");
+        if (rcSaved == null) {
+            rcCheckbox.setChecked(false);
+            tasker.setVariable("TC_allow_repeat_callers", "false");
+        } else {
+            rcCheckbox.setChecked(rcSaved.equals("true"));
+        }
+        rcCheckbox.setButtonDrawable(rcCheckbox.isChecked() ? checkedRc : uncheckedRc);
+        
+        rcConfig = new LinearLayout(activity);
+        
+        rcCheckbox.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
+            onCheckedChanged(android.widget.CompoundButton buttonView, boolean isChecked) {
+                tasker.setVariable("TC_allow_repeat_callers", isChecked ? "true" : "false");
+                rcConfig.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+                drawable = isChecked ? checkedRc : uncheckedRc;
+                if (drawable != null) buttonView.setButtonDrawable(drawable);
+            }
+        });
+        
+        rcHeader.addView(rcTextContainer);
+        rcHeader.addView(rcCheckbox);
+        rcHeader.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) { rcCheckbox.setChecked(!rcCheckbox.isChecked()); }
+        });
+        repeatCard.addView(rcHeader);
+        
+        rcConfig.setOrientation(LinearLayout.VERTICAL);
+        rcConfig.setPadding(u.dpToPx(16), 0, u.dpToPx(16), u.dpToPx(16));
+        rcConfig.setVisibility(rcCheckbox.isChecked() ? View.VISIBLE : View.GONE);
+        
+        LinearLayout createRcInputRow(String labelText, String varName, String defaultVal) {
+            row = new LinearLayout(activity);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(0, u.dpToPx(4), 0, u.dpToPx(4));
+            
+            lbl = new TextView(activity);
+            lbl.setText(labelText);
+            lbl.setTextColor(getColorInt("on-surface-variant"));
+            lbl.setTextSize(14);
+            lbl.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+            row.addView(lbl);
+            
+            input = new android.widget.EditText(activity);
+            input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+            input.setTextColor(getColorInt("on-surface"));
+            input.setTextSize(14);
+            input.setGravity(Gravity.CENTER);
+            input.setPadding(u.dpToPx(8), u.dpToPx(8), u.dpToPx(8), u.dpToPx(8));
+            input.setSingleLine(true);
+            
+            bg = new android.graphics.drawable.GradientDrawable();
+            bg.setColor(getColorInt("surface-variant"));
+            bg.setCornerRadius(u.dpToPx(8));
+            input.setBackground(bg);
+            input.setLayoutParams(new LinearLayout.LayoutParams(u.dpToPx(60), LinearLayout.LayoutParams.WRAP_CONTENT));
+            
+            savedVal = tasker.getVariable(varName);
+            input.setText((savedVal != null && !savedVal.isEmpty()) ? savedVal : defaultVal);
+            
+            input.addTextChangedListener(new android.text.TextWatcher() {
+                beforeTextChanged(CharSequence s, int start, int count, int after) {}
+                onTextChanged(CharSequence s, int start, int before, int count) {}
+                afterTextChanged(android.text.Editable s) {
+                    val = s.toString().trim();
+                    if (val.isEmpty()) val = defaultVal;
+                    tasker.setVariable(varName, val);
+                }
+            });
+            row.addView(input);
+            return row;
+        }
+        
+        rcConfig.addView(createRcInputRow("Required calls:", "TC_repeat_caller_times", "2"));
+        rcConfig.addView(createRcInputRow("Max interval (mins):", "TC_repeat_caller_max_interval", "15"));
+        rcConfig.addView(createRcInputRow("Min gap (secs):", "TC_repeat_caller_min_interval", "0"));
+        
+        repeatCard.addView(rcConfig);
+        filterTab.addView(repeatCard);
+        // --- END REPEAT CALLERS CARD ---
+
+        // --- START DIALED NUMBERS CARD ---
+        dialedCard = new LinearLayout(activity);
+        dialedCard.setOrientation(LinearLayout.VERTICAL);
+        dialedCard.setBackground(createCardBackground(getThemeColor("surface"), 16));
+        dcParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        dcParams.setMargins(u.dpToPx(8), u.dpToPx(8), u.dpToPx(8), u.dpToPx(8));
+        dialedCard.setLayoutParams(dcParams);
+        
+        dcHeader = new LinearLayout(activity);
+        dcHeader.setOrientation(LinearLayout.HORIZONTAL);
+        dcHeader.setGravity(Gravity.CENTER_VERTICAL);
+        dcHeader.setPadding(u.dpToPx(16), u.dpToPx(12), u.dpToPx(16), u.dpToPx(12));
+        
+        dcTextContainer = new LinearLayout(activity);
+        dcTextContainer.setOrientation(LinearLayout.VERTICAL);
+        dcTextContainer.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+        
+        dcLabel = new TextView(activity);
+        dcLabel.setText("Allow Previously Dialed");
+        dcLabel.setTextColor(getColorInt("on-surface"));
+        dcLabel.setTextSize(16);
+        dcTextContainer.addView(dcLabel);
+        
+        dcDesc = new TextView(activity);
+        dcDesc.setText("Let a blocked number ring if you have called them before.");
+        dcDesc.setTextColor(getColorInt("on-surface-variant"));
+        dcDesc.setTextSize(12);
+        dcDescParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        dcDescParams.topMargin = u.dpToPx(4);
+        dcDesc.setLayoutParams(dcDescParams);
+        dcTextContainer.addView(dcDesc);
+        
+        dcCheckbox = new android.widget.CheckBox(activity);
+        dcCheckbox.setButtonDrawable(null);
+        checkedDc = getDrawable(activity, "mw_toggle_check_box");
+        if (checkedDc != null) checkedDc.setTint(getColorInt("primary"));
+        uncheckedDc = getDrawable(activity, "mw_toggle_check_box_outline_blank");
+        if (uncheckedDc != null) uncheckedDc.setTint(getColorInt("outline"));
+        
+        dcSaved = tasker.getVariable("TC_allow_dialed_numbers");
+        if (dcSaved == null) {
+            dcCheckbox.setChecked(false);
+            tasker.setVariable("TC_allow_dialed_numbers", "false");
+        } else {
+            dcCheckbox.setChecked(dcSaved.equals("true"));
+        }
+        dcCheckbox.setButtonDrawable(dcCheckbox.isChecked() ? checkedDc : uncheckedDc);
+        
+        dcConfig = new LinearLayout(activity);
+        
+        dcCheckbox.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
+            onCheckedChanged(android.widget.CompoundButton buttonView, boolean isChecked) {
+                tasker.setVariable("TC_allow_dialed_numbers", isChecked ? "true" : "false");
+                dcConfig.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+                drawable = isChecked ? checkedDc : uncheckedDc;
+                if (drawable != null) buttonView.setButtonDrawable(drawable);
+            }
+        });
+        
+        dcHeader.addView(dcTextContainer);
+        dcHeader.addView(dcCheckbox);
+        dcHeader.setOnClickListener(new View.OnClickListener() {
+            onClick(View v) { dcCheckbox.setChecked(!dcCheckbox.isChecked()); }
+        });
+        dialedCard.addView(dcHeader);
+        
+        dcConfig.setOrientation(LinearLayout.VERTICAL);
+        dcConfig.setPadding(u.dpToPx(16), 0, u.dpToPx(16), u.dpToPx(16));
+        dcConfig.setVisibility(dcCheckbox.isChecked() ? View.VISIBLE : View.GONE);
+        
+        LinearLayout createDcInputRow(String labelText, String varName, String defaultVal) {
+            row = new LinearLayout(activity);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(0, u.dpToPx(4), 0, u.dpToPx(4));
+            
+            lbl = new TextView(activity);
+            lbl.setText(labelText);
+            lbl.setTextColor(getColorInt("on-surface-variant"));
+            lbl.setTextSize(14);
+            lbl.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+            row.addView(lbl);
+            
+            input = new android.widget.EditText(activity);
+            input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+            input.setTextColor(getColorInt("on-surface"));
+            input.setTextSize(14);
+            input.setGravity(Gravity.CENTER);
+            input.setPadding(u.dpToPx(8), u.dpToPx(8), u.dpToPx(8), u.dpToPx(8));
+            input.setSingleLine(true);
+            
+            bg = new android.graphics.drawable.GradientDrawable();
+            bg.setColor(getColorInt("surface-variant"));
+            bg.setCornerRadius(u.dpToPx(8));
+            input.setBackground(bg);
+            input.setLayoutParams(new LinearLayout.LayoutParams(u.dpToPx(60), LinearLayout.LayoutParams.WRAP_CONTENT));
+            
+            savedVal = tasker.getVariable(varName);
+            input.setText((savedVal != null && !savedVal.isEmpty()) ? savedVal : defaultVal);
+            
+            input.addTextChangedListener(new android.text.TextWatcher() {
+                beforeTextChanged(CharSequence s, int start, int count, int after) {}
+                onTextChanged(CharSequence s, int start, int before, int count) {}
+                afterTextChanged(android.text.Editable s) {
+                    val = s.toString().trim();
+                    if (val.isEmpty()) val = defaultVal;
+                    tasker.setVariable(varName, val);
+                }
+            });
+            row.addView(input);
+            return row;
+        }
+
+        LinearLayout createDcDropdownRow(String labelText, String varName, String[] options, String defaultVal, View daysRowToToggle) {
+            row = new LinearLayout(activity);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(0, u.dpToPx(4), 0, u.dpToPx(4));
+
+            lbl = new TextView(activity);
+            lbl.setText(labelText);
+            lbl.setTextColor(getColorInt("on-surface-variant"));
+            lbl.setTextSize(14);
+            lbl.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+            row.addView(lbl);
+
+            display = new TextView(activity);
+            savedVal = tasker.getVariable(varName);
+            if (savedVal == null || savedVal.isEmpty()) savedVal = defaultVal;
+            display.setText(savedVal);
+            display.setTextSize(14);
+            display.setTextColor(getColorInt("on-surface"));
+            display.setPadding(u.dpToPx(12), u.dpToPx(8), u.dpToPx(12), u.dpToPx(8));
+            bg = new android.graphics.drawable.GradientDrawable();
+            bg.setColor(getColorInt("surface-variant"));
+            bg.setCornerRadius(u.dpToPx(8));
+            display.setBackground(bg);
+
+            if (daysRowToToggle != null) {
+                daysRowToToggle.setVisibility("Within Days".equals(savedVal) ? View.VISIBLE : View.GONE);
+            }
+
+            display.setOnClickListener(new View.OnClickListener() {
+                onClick(View v) {
+                    builder = new android.app.AlertDialog.Builder(activity);
+                    container = new LinearLayout(activity);
+                    container.setOrientation(LinearLayout.VERTICAL);
+                    container.setBackgroundColor(getColorInt("surface"));
+                    dialogRef = new Object[1];
+                    for (int i = 0; i < options.length; i++) {
+                        tv = new TextView(activity);
+                        tv.setText(options[i]);
+                        tv.setPadding(u.dpToPx(16), u.dpToPx(16), u.dpToPx(16), u.dpToPx(16));
+                        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+                        tv.setTextColor(getColorInt("on-surface"));
+                        container.addView(tv);
+                        tv.setOnClickListener(new View.OnClickListener() {
+                            onClick(View v2) {
+                                sel = ((TextView)v2).getText().toString();
+                                display.setText(sel);
+                                tasker.setVariable(varName, sel);
+                                if (daysRowToToggle != null) {
+                                    daysRowToToggle.setVisibility("Within Days".equals(sel) ? View.VISIBLE : View.GONE);
+                                }
+                                ((android.app.AlertDialog)dialogRef[0]).dismiss();
+                            }
+                        });
+                    }
+                    builder.setView(container);
+                    dAlert = builder.create();
+                    dialogRef[0] = dAlert;
+                    dAlert.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(getColorInt("surface")));
+                    dAlert.show();
+                }
+            });
+            row.addView(display);
+            return row;
+        }
+        
+        dcDaysRow = createDcInputRow("Days:", "TC_dialed_numbers_days", "7");
+        dcOptions = new String[]{"All Time", "Within Days"};
+        dcRangeRow = createDcDropdownRow("Time Range:", "TC_dialed_numbers_time_range", dcOptions, "All Time", dcDaysRow);
+        
+        dcConfig.addView(dcRangeRow);
+        dcConfig.addView(dcDaysRow);
+        
+        dialedCard.addView(dcConfig);
+        filterTab.addView(dialedCard);
+        // --- END DIALED NUMBERS CARD ---
         
         /* User filters button */
         userFiltersContainer = new LinearLayout(activity);

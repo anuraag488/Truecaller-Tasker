@@ -293,7 +293,8 @@ data() {
         e164Number = u.convertToE164(number);
         db = null;
         cursor = null;
-        cursor2 = null;
+        reasonToReturn = null;
+        
         try {
             db = getReadableDb();
             blockAllCalls = tasker.getVariable("TC_block_all_calls");
@@ -371,19 +372,26 @@ data() {
                     dialingCode != null ? dialingCode : "",
                     carrier != null ? carrier : ""
                 });
+                
                 if (cursor.moveToFirst()) {
                     decision = cursor.getString(0);
                     reason = cursor.getString(1);
-                    if ("Block".equals(decision)) return "User Filter (" + reason + ")";
-                    else if ("Allow".equals(decision)) return null;
+                    if ("Block".equals(decision)) {
+                        reasonToReturn = "User Filter (" + reason + ")";
+                    } else if ("Allow".equals(decision)) {
+                        return null; // Explicit allow skips everything else!
+                    }
                 }
             }
-            if ("true".equals(blockAllCalls)) return "Block all calls";
-            if ("true".equals(blockUnsavedNumbers) && !u.isValidString(csName)) return "Block unsaved numbers";
             
-            if (details != null) {
+            if (reasonToReturn == null) {
+                if ("true".equals(blockAllCalls)) reasonToReturn = "Block all calls";
+                else if ("true".equals(blockUnsavedNumbers) && !u.isValidString(csName)) reasonToReturn = "Block unsaved numbers";
+            }
+            
+            if (reasonToReturn == null && details != null) {
                 jsonString = details[1];
-                spamScore = details[2];
+                spamScore = (Integer) details[2];
                 if (u.isValidString(jsonString)) {
                     try {
                         json = new JSONObject(jsonString);
@@ -399,22 +407,23 @@ data() {
                             }
                             if ("true".equals(blockTopSpammers) && spamType != null) {
                                 if ("TOP_SPAMMER".equals(spamType)) {
-                                    return "Top Spammer" + (spamScore > 0 ? " (spam reports: " + spamScore + ")" : "");
+                                    reasonToReturn = "Top Spammer" + (spamScore > 0 ? " (spam reports: " + spamScore + ")" : "");
                                 }
                             }
-                            if ("true".equals(blockAdditionalSpam) && spamType != null) {
+                            if (reasonToReturn == null && "true".equals(blockAdditionalSpam) && spamType != null) {
                                 if ("SPAMMER".equals(spamType)) {
-                                    return "Block Additional Spam" + (spamScore > 0 ? " (spam reports: " + spamScore + ")" : "");
+                                    reasonToReturn = "Block Additional Spam" + (spamScore > 0 ? " (spam reports: " + spamScore + ")" : "");
                                 }
                             }
-                            if ("true".equals(earlyDetection) && dataObj.has("searchWarnings")) {
+                            if (reasonToReturn == null && "true".equals(earlyDetection) && dataObj.has("searchWarnings")) {
                                 warnings = dataObj.getJSONArray("searchWarnings");
                                 for (int i = 0; i < warnings.length(); i++) {
                                     warning = warnings.getJSONObject(i);
                                     if (warning.has("id")) {
                                         warningId = warning.getString("id");
                                         if ("1".equals(warningId) || "2".equals(warningId) || "12".equals(warningId) || "100".equals(warningId)) {
-                                            return "Early Spam Detection";
+                                            reasonToReturn = "Early Spam Detection";
+                                            break;
                                         }
                                     }
                                 }
@@ -423,21 +432,129 @@ data() {
                     } catch (Exception e) {}
                 }
             }
-            /*if ("true".equals(blockTopSpammers)) {
-                cursor2 = db.rawQuery("SELECT reports FROM topspammers WHERE number = ?", new String[]{e164Number});
-                if (cursor2.moveToFirst()) {
-                    reports = cursor2.getInt(0);
-                    return "Top Spammer (spam reports: " + reports + ")";
-                }
-            }*/
         } catch (Exception e) {
             u.logToFile("Error checking block reason: " + e.getMessage());
         } finally {
             u.closeQuietly(cursor);
-            u.closeQuietly(cursor2);
             u.closeQuietly(db);
         }
-        return null;
+        
+        reasonToReturn = checkRepeatCaller(reasonToReturn, number, e164Number);
+        return checkDialedNumber(reasonToReturn, number, e164Number);
+    }
+
+    checkDialedNumber(reason, number, e164Number) {
+        if (reason == null) return null; // Already allowed
+        
+        allowDialed = tasker.getVariable("TC_allow_dialed_numbers");
+        if (!"true".equals(allowDialed)) return reason;
+        
+        callLogCursor = null;
+        try {
+            timeRange = tasker.getVariable("TC_dialed_numbers_time_range");
+            daysStr = tasker.getVariable("TC_dialed_numbers_days");
+            
+            minThreshold = 0L;
+            if ("Within Days".equals(timeRange)) {
+                days = 7;
+                if (daysStr != null) {
+                    try { days = Integer.parseInt(daysStr.trim()); } catch(Exception e){}
+                }
+                // Calculate milliseconds to subtract from current time
+                minThreshold = System.currentTimeMillis() - (days * 24L * 60L * 60L * 1000L);
+            }
+            
+            callLogUri = android.net.Uri.parse("content://call_log/calls");
+            projection = new String[]{"_id"};
+            // Query for outgoing calls (type 2) matching the number
+            selection = "(number = ? OR normalized_number = ?) AND type = 2 AND date >= ?";
+            selectionArgs = new String[]{number, e164Number, String.valueOf(minThreshold)};
+            
+            callLogCursor = context.getContentResolver().query(callLogUri, projection, selection, selectionArgs, "date DESC LIMIT 1");
+            if (callLogCursor != null && callLogCursor.moveToFirst()) {
+                u.logToFile("Dialed number allowed!");
+                return null;
+            }
+        } catch (Exception e) {
+            u.logToFile("Error checking dialed numbers: " + e.getMessage());
+        } finally {
+            u.closeQuietly(callLogCursor);
+        }
+        
+        return reason;
+    }
+    
+    checkRepeatCaller(reason, number, e164Number) {
+        if (reason == null) return null; // Not blocked anyway
+        
+        allowRepeat = tasker.getVariable("TC_allow_repeat_callers");
+        if (!"true".equals(allowRepeat)) return reason;
+        
+        callLogCursor = null;
+        try {
+            timesStr = tasker.getVariable("TC_repeat_caller_times");
+            minIntStr = tasker.getVariable("TC_repeat_caller_min_interval");
+            maxIntStr = tasker.getVariable("TC_repeat_caller_max_interval");
+            
+            times = 2;
+            if (timesStr != null) {
+                try { times = Integer.parseInt(timesStr.trim()); } catch(Exception e){}
+            }
+            minInt = 0;
+            if (minIntStr != null) {
+                try { minInt = Integer.parseInt(minIntStr.trim()); } catch(Exception e){}
+            }
+            maxInt = 15;
+            if (maxIntStr != null) {
+                try { maxInt = Integer.parseInt(maxIntStr.trim()); } catch(Exception e){}
+            }
+
+            now = System.currentTimeMillis();
+            // Max Interval is in minutes. Multiply by 60 * 1000 to get milliseconds
+            maxThreshold = now - (maxInt * 60 * 1000L);
+            
+            callLogUri = android.net.Uri.parse("content://call_log/calls");
+            projection = new String[]{"date"};
+            selection = "(number = ? OR normalized_number = ?) AND type IN (1, 3, 5, 6) AND date >= ?";
+            selectionArgs = new String[]{number, e164Number, String.valueOf(maxThreshold)};
+            
+            callLogCursor = context.getContentResolver().query(callLogUri, projection, selection, selectionArgs, "date DESC");
+            if (callLogCursor != null) {
+                callTimes = new java.util.ArrayList();
+                while (callLogCursor.moveToNext()) {
+                    callTimes.add(new Long(callLogCursor.getLong(0)));
+                }
+                
+                validPriorCalls = 0;
+                lastConsideredCallTime = now;
+                
+                for (int i = 0; i < callTimes.size(); i++) {
+                    cTime = ((Long)callTimes.get(i)).longValue();
+                    
+                    if (now - cTime < 3000) {
+                        continue;
+                    }
+                    
+                    diff = lastConsideredCallTime - cTime;
+                    // Min gap is in seconds. Multiply by 1000 to get milliseconds
+                    if (diff >= (minInt * 1000L)) {
+                        validPriorCalls++;
+                        lastConsideredCallTime = cTime;
+                    }
+                    
+                    if (validPriorCalls >= (times - 1)) {
+                        u.logToFile("Repeat caller allowed! (Prior valid calls: " + validPriorCalls + ")");
+                        return null; // Allowed due to repeat caller constraints!
+                    }
+                }
+            }
+        } catch (Exception e) {
+            u.logToFile("Error checking repeat callers: " + e.getMessage());
+        } finally {
+            u.closeQuietly(callLogCursor);
+        }
+        
+        return reason;
     }
     
     getWarningMap(warningDataCsv) {
