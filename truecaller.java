@@ -269,18 +269,18 @@ cleanup() {
 }
 
 loadCallLogData(searchQuery) {
-        list = new ArrayList();
-        db = null;
-        cursor = null;
-        
-        groupingSettings = tasker.getVariable("TC_call_log_grouping");
-        if (groupingSettings == null) groupingSettings = "Phone"; // Default to no grouping (show all)
-        groupByDate = groupingSettings.contains("Date");
-        groupByContact = groupingSettings.contains("Contact");
-        groupByPhone = groupingSettings.contains("Phone");
-        showHeaders = groupByDate;
+    list = new ArrayList();
+    db = null;
+    cursor = null;
+    
+    groupingSettings = tasker.getVariable("TC_call_log_grouping");
+    if (groupingSettings == null) groupingSettings = "Phone"; // Default to no grouping (show all)
+    groupByDate = groupingSettings.contains("Date");
+    groupByContact = groupingSettings.contains("Contact");
+    groupByPhone = groupingSettings.contains("Phone");
+    showHeaders = groupByDate;
 
-        formatDateSection(timestamp) {
+    formatDateSection(timestamp) {
         cal = java.util.Calendar.getInstance();
         todayYear = cal.get(java.util.Calendar.YEAR);
         todayDay = cal.get(java.util.Calendar.DAY_OF_YEAR);
@@ -362,6 +362,7 @@ loadCallLogData(searchQuery) {
 
         sdf = new java.text.SimpleDateFormat("dd-MM-yyyy HH:mm:ss");
         lowerQuery = u.isValidString(searchQuery) ? searchQuery.toLowerCase() : null;
+        tokens = lowerQuery != null ? lowerQuery.trim().split("\\s+") : null;
         
         isT9 = false;
         t9Pattern = null;
@@ -453,10 +454,16 @@ loadCallLogData(searchQuery) {
                     else if (tcName != null && t9Pattern.matcher(tcName).matches()) matches = true;
                     else if (note != null && t9Pattern.matcher(note).matches()) matches = true;
                 } else {
-                    if (finalName != null && finalName.toLowerCase().contains(lowerQuery)) matches = true;
-                    else if (callNumber != null && callNumber.toLowerCase().contains(lowerQuery)) matches = true;
-                    else if (tcName != null && tcName.toLowerCase().contains(lowerQuery)) matches = true;
-                    else if (note != null && note.toLowerCase().contains(lowerQuery)) matches = true;
+                    haystack = ((finalName != null ? finalName : "") + "\n"
+                        + (callNumber != null ? callNumber : "") + "\n"
+                        + (tcName != null ? tcName : "") + "\n"
+                        + (note != null ? note : "")).toLowerCase();
+                    matches = true;
+                    for (t = 0; t < tokens.length; t++) {
+                        if (haystack.contains(tokens[t])) { continue; }
+                        matches = false;
+                        break;
+                    }
                 }
             }
 
@@ -510,15 +517,27 @@ loadTruecallerLogData(searchQuery) {
         
         queryArgs = null;
         if (u.isValidString(searchQuery)) {
+            e164Arg = "%" + u.convertToE164(searchQuery) + "%";
+            argList = new ArrayList();
+            argList.add(e164Arg);
+            sb.append("WHERE (number_e164 LIKE ? OR (");
+            /* Every word must match the name or note, in any order. */
+            tokens = searchQuery.trim().split("\\s+");
+            for (i = 0; i < tokens.length; i++) {
+                if (i > 0) sb.append(" AND ");
+                sb.append("(data.name LIKE ? OR data.note LIKE ?)");
+                argList.add("%" + tokens[i] + "%");
+                argList.add("%" + tokens[i] + "%");
+            }
+            sb.append(")");
             if (searchQuery.matches("[0-9+*#]+")) {
                 glob = getT9Glob(searchQuery);
-                sb.append("WHERE data.name GLOB ? OR number_e164 LIKE ? OR data.note GLOB ? ");
-                queryArgs = new String[]{glob, "%" + searchQuery + "%", glob};
-            } else {
-                sb.append("WHERE data.name LIKE ? OR number_e164 LIKE ? OR data.note LIKE ? ");
-                safeArg = "%" + searchQuery + "%";
-                queryArgs = new String[]{safeArg, safeArg, safeArg};
+                sb.append(" OR data.name GLOB ? OR data.note GLOB ?");
+                argList.add(glob);
+                argList.add(glob);
             }
+            sb.append(") ");
+            queryArgs = argList.toArray(new String[0]);
         }
         sb.append("ORDER BY timestamp DESC");
         
@@ -1709,16 +1728,19 @@ createListView(activity) {
                 details = d.loadNumberDetails(searchQuery);
                 if (d.needsUpdate(details)) {
                     tasker.showToast("Fetching fresh data...");
-          			final String finalSearchQuery = searchQuery;
+                    u.logToFile("Fetching fresh data...");
+          			    final String finalSearchQuery = searchQuery;
                     executorService.submit(new Runnable() {
                         run() {
                             try {
                                 d.fetchFromTruecaller(finalSearchQuery);
                             } catch (Exception e) {
                                 tasker.showToast(e.getMessage());
+                                u.logToFile(e.getMessage());
                             }
                             uiObj.mainHandler.post(new Runnable() {
                                 run() {
+                                    u.logToFile("Performing search");
                                     performSearch(finalSearchQuery);
                                 }
                             });
@@ -1741,7 +1763,7 @@ createListView(activity) {
                     allResults.addAll(truecallerResults);
                     allResults.addAll(contactsResults);
                     
-          			final ArrayList finalResults = allResults;
+          			    final ArrayList finalResults = allResults;
                     uiObj.mainHandler.post(new Runnable() {
                         run() {
                             searchResults = finalResults;

@@ -144,6 +144,88 @@ data() {
         }
     }
     
+    fetchBulkFromTruecaller(numbersList) {
+        if (numbersList == null || numbersList.size() == 0) return null;
+        
+        installationId = tasker.getVariable("TC_installation_id");
+        if (!u.isValidString(installationId)) {
+            u.logToFile("TC_installation_id not set");
+            throw new JavaCodeException("TC_installation_id not set");
+        }
+        
+        userAgent = tasker.getVariable("TC_user_agent");
+        if (!u.isValidString(userAgent)) userAgent = "Truecaller/11.75.5 (Android;10)";
+        
+        try {
+            sb = new StringBuffer();
+            for (int i = 0; i < numbersList.size(); i++) {
+                if (i > 0) sb.append(",");
+                sb.append((String) numbersList.get(i)); 
+            }
+            
+            urlString = "https://search5-noneu.truecaller.com/v2/bulk?q=" + 
+                java.net.URLEncoder.encode(sb.toString(), "UTF-8") + 
+                "&countryCode=" + u.getCountryIso() + 
+                "&type=14&encoding=json";
+                
+            request = new Request.Builder()
+                .url(urlString)
+                .addHeader("Authorization", "Bearer " + installationId)
+                .addHeader("user-agent", userAgent)
+                .build();
+            
+            response = httpClient.newCall(request).execute();
+            
+            try {
+                if (response.isSuccessful()) {
+                    jsonResponse = response.body().string();
+                    json = new JSONObject(jsonResponse);
+                    dataArray = json.getJSONArray("data");
+                    
+                    results = new HashMap();
+                    
+                    for (int i = 0; i < dataArray.length(); i++) {
+                        item = dataArray.getJSONObject(i);
+                        key = item.getString("key");
+                        if (item.has("value")) {
+                            valueObj = item.getJSONObject("value");
+                            
+                            /* Re-wrap the value back into standard search array format for saveToDatabase */
+                            pseudoArray = new JSONArray();
+                            pseudoArray.put(valueObj);
+                            pseudoObj = new JSONObject();
+                            pseudoObj.put("data", pseudoArray);
+                            
+                            e164Num = u.convertToE164(key);
+                            details = saveToDatabase(key, e164Num, pseudoObj.toString());
+                            results.put(key, details);
+                        }
+                    }
+                    return results;
+                } else {
+                    errorBody = "";
+                    try {
+                        body = response.body();
+                        if (body != null) {
+                            rawError = body.string();
+                            errorJson = new JSONObject(rawError);
+                            status = errorJson.optInt("status", 0);
+                            message = errorJson.optString("message", rawError);
+                            errorBody = " - " + (status != 0 ? status + " " : "") + message;
+                        }
+                    } catch (Exception parseEx) {}
+                    u.logToFile("Bulk HTTP request failed: " + response.code() + errorBody);
+                    throw new Exception("HTTP " + response.code() + errorBody);
+                }
+            } finally {
+                response.close();
+            }
+        } catch (Exception e) {
+            u.logToFile("Error fetching bulk from Truecaller: " + e.getMessage());
+            throw new JavaCodeException("Failed to fetch bulk: " + e.getMessage());
+        }
+    }
+    
     saveToDatabase(number, numberE164, jsonResponse) {
         db = null;
         cursor = null;
