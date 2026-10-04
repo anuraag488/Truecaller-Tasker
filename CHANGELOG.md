@@ -25,6 +25,10 @@
 
 ## Changelog
 
+### 2026-10-03
+* Added Get Bulk Details Task
+* Improved search
+
 ### 2026-08-03
 * Added option to allow repeat callers
 * Added option to allow dialed numbers
