@@ -194,7 +194,7 @@ util() {
         checkAndSet("TC_repeat_caller_max_interval", "5");
         checkAndSet("TC_dialed_numbers_time_range", "All Time");
         checkAndSet("TC_dialed_numbers_days", "7");
-        checkAndSet("TC_log_level", "None");
+        checkAndSet("TC_log_level", "Default");
 
         /* 2. Boolean 'true' defaults */
         String[] trueVars = new String[]{
