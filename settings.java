@@ -17,12 +17,15 @@ u = util();
 uiObj = ui();
 
 
+u.logDebug("settings: opening settings dialog");
+
 /* Cleanup existing Settings tasks to avoid stacking */
 uiObj.handleExistingTask("Truecaller-Settings", true);
 
 activityConsumer = new Consumer() {
     accept(activityObj) {
         activity = (Activity) activityObj;
+        try {
         
         activity.getWindow().setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
         activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
@@ -51,6 +54,11 @@ activityConsumer = new Consumer() {
         if (dialog == null) {
             uiObj.cleanup();
             activity.finishAndRemoveTask();
+        }
+        } catch (Exception e) {
+            u.logToFile("settings: failed to open settings dialog: " + e.getMessage());
+            uiObj.cleanup();
+            activityObj.finishAndRemoveTask();
         }
     }
 };

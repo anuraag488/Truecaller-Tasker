@@ -5,13 +5,34 @@ import android.util.TypedValue;
 import java.util.ArrayList;
 
 util() {
-    logToFile(message) {
-        if (!debugEnabled) return;
+    log(message) {
         try {
+            f = new java.io.File(logFile);
+            if (f.exists() && f.length() > 1048576) {
+                old = new java.io.File(logFile + ".old");
+                if (old.exists()) old.delete();
+                f.renameTo(old);
+            }
             tasker.log(message, logFile);
         } catch(Exception e) {
             tasker.log("File log error: " + e.getMessage());
         }
+    }
+    /* Errors only: shown for log levels Default and Debug. */
+    logToFile(message) {
+        if (logLevel < 1) return;
+        log(message);
+    }
+    
+    /* Verbose: shown only for log level Debug. */
+    logDebug(message) {
+        if (logLevel < 2) return;
+        log(message);
+    }
+
+    /* Use to skip building expensive log strings in hot paths. */
+    isDebug() {
+        return logLevel >= 2;
     }
     
     isValidString(str) {
@@ -20,7 +41,7 @@ util() {
     
     closeQuietly(obj) {
         if (obj != null) {
-            try { obj.close(); } catch(Exception e) {}
+            try { obj.close(); } catch(Exception e) { logDebug("closeQuietly failed: " + e.getMessage()); }
         }
     }
     
@@ -48,6 +69,7 @@ util() {
             e164 = PhoneNumberUtils.formatNumberToE164(number, countryIso);
             return e164 != null ? e164 : number;
         } catch (Exception e) {
+            logToFile("convertToE164 formatting failed: " + e.getMessage());
             return number;
         }
     }
@@ -82,7 +104,9 @@ util() {
             if (addressParts.size() > 0) {
                 return android.text.TextUtils.join(", ", addressParts);
             }
-        } catch(Exception e) {}
+        } catch(Exception e) {
+            logToFile("parseAddress JSON error: " + e.getMessage());
+        }
         return null;
     }
 
@@ -98,11 +122,14 @@ util() {
                     if (phone.has("dialingCode")) { dc = phone.getString("dialingCode"); if (isValidString(dc) && !dc.equals("null")) list.add(dc); }
                 }
             }
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            logToFile("extractPhoneInfo JSON error: " + e.getMessage());
+        }
         return list;
     }
     
     makeCall(number) {
+        logDebug("makeCall: " + number);
         try {
             intent = new Intent(Intent.ACTION_CALL);
             intent.setData(Uri.parse("tel:" + number));
@@ -120,6 +147,7 @@ util() {
     }
 
     sendSms(number) {
+        logDebug("sendSms: " + number);
         try {
             intent = new Intent(Intent.ACTION_SENDTO);
             intent.setData(Uri.parse("smsto:" + number));
@@ -145,6 +173,16 @@ util() {
                 tasker.setVariable(varName, defaultVal);
             }
         }
+        
+        /* Migrate old debug variable to new log level variable */
+        oldDebug = tasker.getVariable("TC_debug_enabled");
+        if ("true".equals(oldDebug)) {
+            tasker.setVariable("TC_log_level", "Debug");
+            tasker.clearVariable("TC_debug_enabled");
+        } else if ("false".equals(oldDebug)) {
+            tasker.setVariable("TC_log_level", "None");
+            tasker.clearVariable("TC_debug_enabled");
+        }
 
         /* 1. String defaults */
         checkAndSet("TC_caller_id_display_type", "Overlay");
@@ -156,6 +194,7 @@ util() {
         checkAndSet("TC_repeat_caller_max_interval", "5");
         checkAndSet("TC_dialed_numbers_time_range", "All Time");
         checkAndSet("TC_dialed_numbers_days", "7");
+        checkAndSet("TC_log_level", "None");
 
         /* 2. Boolean 'true' defaults */
         String[] trueVars = new String[]{
@@ -172,7 +211,7 @@ util() {
             "TC_monitor_clipboard", "TC_enable_for_sms", "TC_enable_for_whatsapp_calls",
             "TC_enable_for_whatsapp_msgs", "TC_block_all_calls", "TC_block_unsaved_numbers",
             "TC_spam_calls_block_top_spammers", "TC_spam_calls_block_additional",
-            "TC_spam_calls_early_detection", "TC_private_calls_block", "TC_debug_enabled", 
+            "TC_spam_calls_early_detection", "TC_private_calls_block", 
             "TC_allow_repeat_callers", "TC_allow_dialed_numbers"
         };
         for (int i = 0; i < falseVars.length; i++) {
@@ -182,17 +221,6 @@ util() {
         /* 4. Path defaults & App Factory Support */
         pkgName = context.getPackageName();
         isTasker = (pkgName != null && pkgName.equals("net.dinglisch.android.taskerm"));
-        
-        //needs to setup TC_dir from tasker task actions
-        /*tcDir = tasker.getVariable("TC_dir");
-        if (!isValidString(tcDir)) {
-            if (!isTasker) {
-                tcDir = context.getFilesDir().getAbsolutePath();
-            } else {
-                tcDir = "/storage/emulated/0/Tasker/truecaller";
-            }
-            tasker.setVariable("TC_dir", tcDir);
-        }*/
 
         dbPath = tasker.getVariable("TC_dbpath");
         if (!isValidString(dbPath)) {
@@ -205,9 +233,14 @@ util() {
         }
     }
 
-    /* Auto-run initialization and reload debug variable in case it was just set */
+    /* Auto-run initialization and reload log level variable in case it was just set */
     initDefaults();
-    debugEnabled = "true".equals(tasker.getVariable("TC_debug_enabled"));
+    
+    logLevelStr = tasker.getVariable("TC_log_level");
+    logLevel = 0;
+    if ("Default".equals(logLevelStr)) logLevel = 1;
+    else if ("Debug".equals(logLevelStr)) logLevel = 2;
+    
     logFile = tasker.getVariable("TC_dir") + "/log/truecaller_debug.log";
 
     return this;

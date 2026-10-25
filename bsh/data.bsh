@@ -25,7 +25,9 @@ data() {
     reloadDb() {
         try {
             if (helper != null) helper.close();
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            u.logToFile("reloadDb helper close error: " + e.getMessage());
+        }
         helper = dbHelper();
     }
 
@@ -62,13 +64,15 @@ data() {
                 currentTime = System.currentTimeMillis() / 1000;
                 timestamp = details[6];
                 
+                u.logDebug("loadNumberDetails: cache hit for " + e164Number + " (age " + (currentTime - timestamp) + "s, name=" + details[0] + ")");
                 if (currentTime - timestamp > CACHE_EXPIRY_SECONDS) {
-                    u.logToFile("Data older than 30 days, will fetch fresh data");
+                    u.logDebug("loadNumberDetails: data older than 30 days, will need fresh data");
                 }
                 return details;
             }
+            u.logDebug("loadNumberDetails: no cached data for " + e164Number);
         } catch (Exception e) {
-            u.logToFile("Error loading number details: " + e.getMessage());
+            u.logToFile("Error loading number details for " + e164Number + ": " + e.getMessage());
         } finally {
             u.closeQuietly(cursor);
             u.closeQuietly(db);
@@ -101,6 +105,8 @@ data() {
                 java.net.URLEncoder.encode(e164Number, "UTF-8") + 
                 "&countryCode=" + u.getCountryIso() + 
                 "&type=1&encoding=json";
+            u.logDebug("fetchFromTruecaller: requesting " + e164Number);
+            fetchStart = System.currentTimeMillis();
                 
             request = new Request.Builder()
                 .url(urlString)
@@ -113,6 +119,7 @@ data() {
             try {
                 if (response.isSuccessful()) {
                     jsonResponse = response.body().string();
+                    u.logDebug("fetchFromTruecaller: HTTP " + response.code() + " in " + (System.currentTimeMillis() - fetchStart) + "ms, " + jsonResponse.length() + " chars");
                     details = saveToDatabase(number, e164Number, jsonResponse);
                     
                     if (details != null) {
@@ -131,7 +138,9 @@ data() {
                             message = errorJson.optString("message", rawError);
                             errorBody = " - " + (status != 0 ? status + " " : "") + message;
                         }
-                    } catch (Exception parseEx) {}
+                    } catch (Exception parseEx) {
+                        u.logToFile("Error parsing HTTP error body: " + parseEx.getMessage());
+                    }
                     u.logToFile("HTTP request failed: " + response.code() + errorBody);
                     throw new Exception("HTTP " + response.code() + errorBody);
                 }
@@ -167,6 +176,8 @@ data() {
                 java.net.URLEncoder.encode(sb.toString(), "UTF-8") + 
                 "&countryCode=" + u.getCountryIso() + 
                 "&type=14&encoding=json";
+            u.logDebug("fetchBulkFromTruecaller: requesting " + numbersList.size() + " numbers");
+            fetchStart = System.currentTimeMillis();
                 
             request = new Request.Builder()
                 .url(urlString)
@@ -182,6 +193,7 @@ data() {
                     json = new JSONObject(jsonResponse);
                     dataArray = json.getJSONArray("data");
                     
+                    u.logDebug("fetchBulkFromTruecaller: HTTP " + response.code() + " in " + (System.currentTimeMillis() - fetchStart) + "ms, " + dataArray.length() + " items returned");
                     results = new HashMap();
                     
                     for (int i = 0; i < dataArray.length(); i++) {
@@ -213,7 +225,9 @@ data() {
                             message = errorJson.optString("message", rawError);
                             errorBody = " - " + (status != 0 ? status + " " : "") + message;
                         }
-                    } catch (Exception parseEx) {}
+                    } catch (Exception parseEx) {
+                        u.logToFile("Error parsing HTTP error body: " + parseEx.getMessage());
+                    }
                     u.logToFile("Bulk HTTP request failed: " + response.code() + errorBody);
                     throw new Exception("HTTP " + response.code() + errorBody);
                 }
@@ -233,7 +247,7 @@ data() {
             json = new JSONObject(jsonResponse);
             dataArray = json.getJSONArray("data");
             if (dataArray.length() == 0) {
-                u.logToFile("No data in response");
+                u.logDebug("saveToDatabase: no data in response for " + numberE164);
                 return null;
             }
             dataObj = dataArray.getJSONObject(0);
@@ -265,6 +279,7 @@ data() {
                 }
                 
                 if (nameModified == 1 && u.isValidString(existingName)) {
+                    u.logDebug("saveToDatabase: keeping user-modified name for " + numberE164);
                     values.put("name", existingName);
                     values.put("name_modified", 1);
                     tcName = existingName;
@@ -314,7 +329,7 @@ data() {
                 db.endTransaction();
             }
             
-            u.logToFile("Saved to database: " + numberE164);
+            u.logDebug("Saved to database: " + numberE164 + " name=" + tcName + " spam=" + spamScore + " verified=" + isVerified);
             
             details = new Object[6];
             details[0] = tcName;
@@ -365,7 +380,9 @@ data() {
             if (contactCursor != null && contactCursor.moveToFirst()) {
                 return contactCursor.getString(0);
             }
-        } catch (Exception e) {} finally {
+        } catch (Exception e) {
+            u.logToFile("Error loading contact photo: " + e.getMessage());
+        } finally {
             u.closeQuietly(contactCursor);
         }
         return null;
@@ -385,6 +402,9 @@ data() {
             blockAdditionalSpam = tasker.getVariable("TC_spam_calls_block_additional");
             earlyDetection = tasker.getVariable("TC_spam_calls_early_detection");
             userFiltersEnabled = tasker.getVariable("TC_user_filters");
+            if (u.isDebug()) {
+                u.logDebug("getBlockReason: " + e164Number + " csName=" + csName + " settings[blockAll=" + blockAllCalls + " blockUnsaved=" + blockUnsavedNumbers + " topSpammers=" + blockTopSpammers + " additionalSpam=" + blockAdditionalSpam + " earlyDetection=" + earlyDetection + " userFilters=" + userFiltersEnabled + "]");
+            }
             
             if ("true".equals(userFiltersEnabled)) {
                 query = "WITH vars(is_contact) AS ( " +
@@ -437,13 +457,18 @@ data() {
                             dataArray = json.getJSONArray("data");
                             if (dataArray.length() > 0) {
                                 dataObj = dataArray.getJSONObject(0);
+                                /* Top-level values first, then phones[0] (which wins), matching what the filter dialog offers. */
+                                if (dataObj.has("countryCode")) countryCode = dataObj.getString("countryCode");
+                                if (dataObj.has("dialingCode")) dialingCode = dataObj.getString("dialingCode");
                                 if (dataObj.has("phones")) {
                                     phone = dataObj.getJSONArray("phones").getJSONObject(0);
+                                    if (phone.has("countryCode")) countryCode = phone.getString("countryCode");
                                     if (phone.has("dialingCode")) dialingCode = phone.getString("dialingCode");
                                     if (phone.has("carrier"))     carrier     = phone.getString("carrier");
                                 }
+                                u.logDebug("getBlockReason: filter inputs countryCode=" + countryCode + " dialingCode=" + dialingCode + " carrier=" + carrier);
                             }
-                        } catch (Exception e) {}
+                        } catch (Exception e) { u.logToFile("getBlockReason JSON parsing error: " + e.getMessage()); }
                     }
                 }
                 cursor = db.rawQuery(query, new String[]{
@@ -458,9 +483,11 @@ data() {
                 if (cursor.moveToFirst()) {
                     decision = cursor.getString(0);
                     reason = cursor.getString(1);
+                    u.logDebug("getBlockReason: user filter decision=" + decision + " reason=" + reason);
                     if ("Block".equals(decision)) {
                         reasonToReturn = "User Filter (" + reason + ")";
                     } else if ("Allow".equals(decision)) {
+                        u.logDebug("getBlockReason: explicit Allow filter for " + e164Number + ", skipping all other checks");
                         return null; // Explicit allow skips everything else!
                     }
                 }
@@ -511,7 +538,7 @@ data() {
                                 }
                             }
                         }
-                    } catch (Exception e) {}
+                    } catch (Exception e) { u.logToFile("getBlockReason spam JSON parsing error: " + e.getMessage()); }
                 }
             }
         } catch (Exception e) {
@@ -521,8 +548,11 @@ data() {
             u.closeQuietly(db);
         }
         
+        u.logDebug("getBlockReason: " + e164Number + " reason before repeat/dialed checks=" + reasonToReturn);
         reasonToReturn = checkRepeatCaller(reasonToReturn, number, e164Number);
-        return checkDialedNumber(reasonToReturn, number, e164Number);
+        reasonToReturn = checkDialedNumber(reasonToReturn, number, e164Number);
+        u.logDebug("getBlockReason: " + e164Number + " final reason=" + reasonToReturn);
+        return reasonToReturn;
     }
 
     checkDialedNumber(reason, number, e164Number) {
@@ -540,7 +570,7 @@ data() {
             if ("Within Days".equals(timeRange)) {
                 days = 7;
                 if (daysStr != null) {
-                    try { days = Integer.parseInt(daysStr.trim()); } catch(Exception e){}
+                    try { days = Integer.parseInt(daysStr.trim()); } catch(Exception e){ u.logToFile("checkDialedNumber parse error: " + e.getMessage()); }
                 }
                 // Calculate milliseconds to subtract from current time
                 minThreshold = System.currentTimeMillis() - (days * 24L * 60L * 60L * 1000L);
@@ -554,7 +584,7 @@ data() {
             
             callLogCursor = context.getContentResolver().query(callLogUri, projection, selection, selectionArgs, "date DESC LIMIT 1");
             if (callLogCursor != null && callLogCursor.moveToFirst()) {
-                u.logToFile("Dialed number allowed!");
+                u.logDebug("checkDialedNumber: outgoing call found for " + number + ", allowing");
                 return null;
             }
         } catch (Exception e) {
@@ -580,20 +610,21 @@ data() {
             
             times = 2;
             if (timesStr != null) {
-                try { times = Integer.parseInt(timesStr.trim()); } catch(Exception e){}
+                try { times = Integer.parseInt(timesStr.trim()); } catch(Exception e){ u.logToFile("checkRepeatCaller times parse error: " + e.getMessage()); }
             }
             minInt = 0;
             if (minIntStr != null) {
-                try { minInt = Integer.parseInt(minIntStr.trim()); } catch(Exception e){}
+                try { minInt = Integer.parseInt(minIntStr.trim()); } catch(Exception e){ u.logToFile("checkRepeatCaller minInt parse error: " + e.getMessage()); }
             }
             maxInt = 15;
             if (maxIntStr != null) {
-                try { maxInt = Integer.parseInt(maxIntStr.trim()); } catch(Exception e){}
+                try { maxInt = Integer.parseInt(maxIntStr.trim()); } catch(Exception e){ u.logToFile("checkRepeatCaller maxInt parse error: " + e.getMessage()); }
             }
 
             now = System.currentTimeMillis();
             // Max Interval is in minutes. Multiply by 60 * 1000 to get milliseconds
             maxThreshold = now - (maxInt * 60 * 1000L);
+            u.logDebug("checkRepeatCaller: times=" + times + " minInterval=" + minInt + "s maxInterval=" + maxInt + "m");
             
             callLogUri = android.net.Uri.parse("content://call_log/calls");
             projection = new String[]{"date"};
@@ -625,7 +656,7 @@ data() {
                     }
                     
                     if (validPriorCalls >= (times - 1)) {
-                        u.logToFile("Repeat caller allowed! (Prior valid calls: " + validPriorCalls + ")");
+                        u.logDebug("checkRepeatCaller: repeat caller allowed (prior valid calls: " + validPriorCalls + ")");
                         return null; // Allowed due to repeat caller constraints!
                     }
                 }
@@ -668,7 +699,9 @@ data() {
           result = new String[]{cursor.getString(0), cursor.getString(1)};
           return result;
         }
-      } catch (Exception e) {}
+      } catch (Exception e) {
+          u.logToFile("Error loading tag details for " + tagId + ": " + e.getMessage());
+      }
       finally {
         u.closeQuietly(cursor);
         u.closeQuietly(db);
@@ -686,7 +719,9 @@ data() {
           result = new String[]{cursor.getString(0), cursor.getString(1)};
           return result;
         }
-      } catch (Exception e) {}
+      } catch (Exception e) {
+          u.logToFile("Error loading spam category " + categoryId + ": " + e.getMessage());
+      }
       finally {
         u.closeQuietly(cursor);
         u.closeQuietly(db);
@@ -719,6 +754,7 @@ data() {
     }
     
     saveFilter(type, field, value, note) {
+        u.logDebug("saveFilter: " + type + " " + field + "=" + value);
         db = null;
         try {
             db = getWritableDb();
@@ -737,6 +773,7 @@ data() {
     }
 
     toggleFilter(value, enabled) {
+        u.logDebug("toggleFilter: " + value + " enabled=" + enabled);
         db = null;
         try {
             db = getWritableDb();
@@ -749,6 +786,7 @@ data() {
     }
 
     deleteFilter(value) {
+        u.logDebug("deleteFilter: " + value);
         db = null;
         try {
             db = getWritableDb();

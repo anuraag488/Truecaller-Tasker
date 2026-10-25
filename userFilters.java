@@ -32,12 +32,15 @@ if (u.isValidString(par2)) {
     filterType = par2;
 }
 
+u.logDebug("userFilters: number=" + filterNumber + " type=" + filterType);
+
 /* Cleanup existing User Filter tasks to avoid stacking */
 uiObj.handleExistingTask("Truecaller-Filters", true);
 
 activityConsumer = new Consumer() {
     accept(activityObj) {
         activity = (Activity) activityObj;
+        try {
         
         activity.getWindow().setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
         activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
@@ -77,6 +80,11 @@ activityConsumer = new Consumer() {
         } else {
             uiObj.cleanup();
             activity.finishAndRemoveTask();
+        }
+        } catch (Exception e) {
+            u.logToFile("userFilters: failed to open filters dialog: " + e.getMessage());
+            uiObj.cleanup();
+            activityObj.finishAndRemoveTask();
         }
     }
 };

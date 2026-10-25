@@ -32,7 +32,7 @@ dbHelper() {
     dbHelperImplementation = new ClassImplementation(){
         run(Callable superCaller, String methodName, Object[] args){
             if ("onCreate".equals(methodName)) {
-                u.logToFile("Creating Truecaller database tables...");
+                u.logDebug("Creating Truecaller database tables...");
                 SQLiteDatabase db = (SQLiteDatabase) args[0];
                 createTables(db);
                 return null;
@@ -40,12 +40,12 @@ dbHelper() {
             if ("onUpgrade".equals(methodName)) {
                 SQLiteDatabase db = (SQLiteDatabase) args[0];
                 int oldVersion = ((Integer) args[1]).intValue();
-                u.logToFile("Upgrading Truecaller database from version " + oldVersion + "...");
+                u.logDebug("Upgrading Truecaller database from version " + oldVersion + "...");
                 
                 db.beginTransaction();
                 try {
                     if (oldVersion < 11) {
-                        u.logToFile("Version too old, wiping database and starting fresh...");
+                        u.logDebug("Version too old, wiping database and starting fresh...");
                         db.execSQL("DROP TABLE IF EXISTS data");
                         db.execSQL("DROP TABLE IF EXISTS number_map");
                         db.execSQL("DROP TABLE IF EXISTS filters");
@@ -64,11 +64,15 @@ dbHelper() {
                                 while (c != null && c.moveToNext()) {
                                     oldFilters.add(new Object[]{ c.getString(0), c.getString(1), c.getString(2), c.getString(3), new Integer(c.getInt(4)), c.getString(5) });
                                 }
-                            } catch(Exception e) {} finally { u.closeQuietly(c); }
+                            } catch(Exception e) {
+                                /* Abort the whole upgrade so the old filters table is not dropped. */
+                                throw new RuntimeException("Error migrating old filters: " + e.getMessage(), e);
+                            } finally { u.closeQuietly(c); }
 
                             db.execSQL("DROP TABLE IF EXISTS filters");
                             db.execSQL("CREATE TABLE IF NOT EXISTS filters (type TEXT NOT NULL CHECK(type IN ('Allow','Block')), field TEXT NOT NULL CHECK(field IN ('number','name','country code','dialing code','carrier')), value TEXT NOT NULL, norm_val TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, note TEXT, UNIQUE(field, norm_val))");
 
+                            u.logDebug("Migrating " + oldFilters.size() + " old filters");
                             for (int i=0; i<oldFilters.size(); i++) {
                                 Object[] f = (Object[]) oldFilters.get(i);
                                 String type = (String) f[0];
@@ -110,9 +114,11 @@ dbHelper() {
                         }
                     }
                     db.setTransactionSuccessful();
-                    u.logToFile("Truecaller database upgraded successfully!");
+                    u.logDebug("Truecaller database upgraded successfully!");
                 } catch(Exception e) {
-                    u.logToFile("Error upgrading database: " + e.getMessage());
+                    u.logToFile("Error upgrading database from version " + oldVersion + ": " + e.getMessage());
+                    /* Rethrow so SQLite rolls back and keeps the old version, instead of marking the DB as upgraded. */
+                    throw new RuntimeException("Database upgrade failed: " + e.getMessage(), e);
                 } finally {
                     db.endTransaction();
                 }

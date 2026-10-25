@@ -20,6 +20,7 @@ d = data();
 
 installId = tasker.getVariable("TC_installation_id");
 if (!u.isValidString(installId) || installId.equals("%TC_installation_id")) {
+    u.logToFile("updateDatabase: TC_installation_id not set, cannot update database");
     tasker.showToast("Installation ID not set! Cannot update database.");
     return;
 }
@@ -38,6 +39,8 @@ if (caller1 == null || !caller1.startsWith("profile=")) {
     forceUpdate = true;
 }
 
+u.logDebug("updateDatabase: start forceUpdate=" + forceUpdate + " caller1=" + caller1);
+
 currentTime = System.currentTimeMillis() / 1000;
 sevenDays = 7 * 86400;
 
@@ -52,6 +55,7 @@ try {
     }
 } catch (Exception e) {
     // Failsafe if the JSON string gets corrupted
+    u.logToFile("updateDatabase: TC_last_update_check is corrupted, resetting: " + e.getMessage());
     lastUpdateObj = new JSONObject();
 }
 
@@ -63,7 +67,9 @@ boolean shouldUpdate(String key) {
     long lastCheck = lastUpdateObj.optLong(key, 0L);
     if (lastCheck == 0L) return true; // Never updated
     
-    return (currentTime - lastCheck) > sevenDays;
+    result = (currentTime - lastCheck) > sevenDays;
+    u.logDebug("updateDatabase: shouldUpdate(" + key + ") = " + result);
+    return result;
 }
 
 httpClient = new OkHttpClient.Builder()
@@ -75,6 +81,7 @@ db = null;
 try {
     db = d.getWritableDb();
 } catch (Exception e) {
+    u.logToFile("updateDatabase: could not open database: " + e.getMessage());
     tasker.showToast("Could not open database: " + e.getMessage());
     return;
 }
@@ -82,7 +89,7 @@ try {
 try {
     /* --- 1. SPAM CATEGORIES --- */
     if (shouldUpdate("spam_categories")) {
-        u.logToFile("Updating Spam Categories...");
+        u.logDebug("Updating Spam Categories...");
         try {
             request = new Request.Builder()
                 .url("https://filter-store4-noneu.truecaller.com/v1/spamCategories?encoding=json")
@@ -114,7 +121,7 @@ try {
                     // Update JSON Object
                     lastUpdateObj.put("spam_categories", currentTime);
                     jsonModified = true;
-                    u.logToFile("Spam Categories updated successfully.");
+                    u.logDebug("Spam Categories updated successfully (" + arr.length() + " items).");
                 } finally {
                     db.endTransaction();
                 }
@@ -129,7 +136,7 @@ try {
 
     /* --- 2. TAGS --- */
     if (shouldUpdate("tags")) {
-        u.logToFile("Updating Tags...");
+        u.logDebug("Updating Tags...");
         try {
             request = new Request.Builder()
                 .url("https://tagging5-noneu.truecaller.com/v1/tags?encoding=json")
@@ -162,7 +169,7 @@ try {
                     // Update JSON Object
                     lastUpdateObj.put("tags", currentTime);
                     jsonModified = true;
-                    u.logToFile("Tags updated successfully.");
+                    u.logDebug("Tags updated successfully (" + arr.length() + " items).");
                 } finally {
                     db.endTransaction();
                 }
@@ -177,7 +184,7 @@ try {
 
     /* --- 3. TOP SPAMMERS --- */
     /*if (shouldUpdate("topspammers")) {
-        u.logToFile("Updating Top Spammers...");
+        u.logDebug("Updating Top Spammers...");
         try {
             request = new Request.Builder()
                 .url("https://topspammers-noneu.truecaller.com/v4/spammers?maxSize=40000&type=caller&encoding=json")
@@ -208,7 +215,7 @@ try {
                     // Update JSON Object
                     lastUpdateObj.put("topspammers", currentTime);
                     jsonModified = true;
-                    u.logToFile("Top Spammers updated successfully.");
+                    u.logDebug("Top Spammers updated successfully (" + arr.length() + " items).");
                 } finally {
                     db.endTransaction();
                 }
@@ -229,6 +236,7 @@ try {
 /* Save the updated JSON back to Tasker if there were any successful updates */
 if (jsonModified) {
     tasker.setVariable("TC_last_update_check", lastUpdateObj.toString());
+    u.logDebug("updateDatabase: saved TC_last_update_check");
 }
 
 if (forceUpdate) {

@@ -39,6 +39,7 @@ uiObj = ui();
 tcRemovalRunnable = tasker.getJavaVariable("tcRemovalRunnable");
 if (tcRemovalRunnable != null && tcRemovalRunnable != void) {
     try {
+        u.logDebug("showOverlay: removing previous overlay instance");
         tcRemovalRunnable.run();
     } catch(Exception e) {
         u.logToFile("Error cleaning up previous instance: " + e.getMessage());
@@ -52,13 +53,17 @@ if (u.isValidString(par1) && Patterns.PHONE.matcher(par1).matches()) {
 }
 
 if (number == null) {
+  u.logToFile("showOverlay: par1 is required, got: " + par1);
   throw new JavaCodeException("par1 is required");
 }
 
 dbPath = tasker.getVariable("TC_dbpath");
 if (!u.isValidString(dbPath)) {
+  u.logToFile("showOverlay: TC_dbpath variable is not set");
   throw new JavaCodeException("TC_dbpath variable is not set");
 }
+
+u.logDebug("showOverlay: starting for " + number + " dbPath=" + dbPath);
 
 warningDataCsv = tasker.getVariable("warning_data");
 warningMap = d.getWarningMap(warningDataCsv);
@@ -214,7 +219,7 @@ View createOverlayView(Context ctx, WindowManager.LayoutParams layoutParams) {
           }
         }
       }
-    } catch(Exception e) {}
+    } catch(Exception e) { u.logToFile("showOverlay: error building address row: " + e.getMessage()); }
   }
   
   firstRow.addView(firstRowInfo);
@@ -361,7 +366,7 @@ View createOverlayView(Context ctx, WindowManager.LayoutParams layoutParams) {
           
           try {
             windowManager.updateViewLayout(wrapper, safeParams);
-          } catch(Exception e) {}
+          } catch(Exception e) { u.logDebug("showOverlay: updateViewLayout failed while dragging: " + e.getMessage()); }
           return true;
         }
         
@@ -397,16 +402,17 @@ void showOverlay() {
 
   if (useAccessibility) {
     windowManager = accessibilityService.getSystemService(Context.WINDOW_SERVICE);
-    tasker.log("Using WindowManager from Accessibility Service");
+    u.logDebug("Using WindowManager from Accessibility Service");
   } else {
     windowManager = context.getSystemService(Context.WINDOW_SERVICE);
-    tasker.log("Using WindowManager from regular context");
+    u.logDebug("Using WindowManager from regular context");
   }
   
   if (!useAccessibility && android.os.Build.VERSION.SDK_INT >= 23) {
     canDraw = android.provider.Settings.canDrawOverlays(context);
-    u.logToFile("Can draw overlays permission: " + canDraw);
+    u.logDebug("Can draw overlays permission: " + canDraw);
     if (!canDraw) {
+      u.logToFile("showOverlay: System Alert Window permission not granted");
       throw new JavaCodeException("System Alert Window permission not granted. Enable in Settings.");
     }
   }
@@ -441,6 +447,7 @@ void showOverlay() {
     try {
       overlayParams.y = Integer.parseInt(savedPosition);
     } catch(Exception e) {
+      u.logToFile("showOverlay: invalid saved TC_overlay_position '" + savedPosition + "', using default: " + e.getMessage());
       overlayParams.y = u.dpToPx(100);
     }
   } else {
@@ -451,15 +458,15 @@ void showOverlay() {
   
   try {
     windowManager.addView(overlayView, overlayParams);
-    u.logToFile("Overlay shown using " + (useAccessibility ? "Accessibility Service" : "System Alert Window"));
+    u.logDebug("Overlay shown using " + (useAccessibility ? "Accessibility Service" : "System Alert Window"));
   } catch(Exception e) {
     u.logToFile("Error showing overlay: " + e.getMessage());
     if (useAccessibility) {
       try {
-        u.logToFile("Trying fallback to TYPE_APPLICATION_OVERLAY");
+        u.logDebug("Trying fallback to TYPE_APPLICATION_OVERLAY");
         overlayParams.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
         windowManager.addView(overlayView, overlayParams);
-        u.logToFile("Overlay shown using fallback TYPE_APPLICATION_OVERLAY");
+        u.logDebug("Overlay shown using fallback TYPE_APPLICATION_OVERLAY");
       } catch(Exception e2) {
         u.logToFile("Fallback also failed: " + e2.getMessage());
         throw new JavaCodeException("Failed to show overlay: " + e2.getMessage());
@@ -474,7 +481,7 @@ void removeOverlay() {
   if (overlayView != null && windowManager != null) {
     try {
       windowManager.removeView(overlayView);
-      u.logToFile("Overlay removed.");
+      u.logDebug("Overlay removed.");
     } catch(Exception e) {
       u.logToFile("Error removing overlay: " + e.getMessage());
     }
@@ -497,6 +504,10 @@ tasker.setJavaVariable("tcRemovalRunnable", cleanupCallback);
 
 uiObj.mainHandler.post(new Runnable() {
   run() {
-    showOverlay();
+    try {
+      showOverlay();
+    } catch (Exception e) {
+      u.logToFile("showOverlay: failed to show overlay: " + e.getMessage());
+    }
   }
 });

@@ -110,6 +110,7 @@ ui() {
             builder = new ImageLoader.Builder(context).memoryCache(memoryCache).allowHardware(false);
             if (diskCache != null) builder.diskCache(diskCache);
             imageLoader = builder.build();
+            u.logDebug("Coil image loader ready (diskCache=" + (diskCache != null) + ")");
         } catch (Exception e) {
             u.logToFile("Error setting up Coil: " + e.getMessage());
         }
@@ -122,7 +123,7 @@ ui() {
     cancelImageLoad(imageView) {
         existingDisposable = disposableMap.get(imageView);
         if (existingDisposable != null) {
-            try { existingDisposable.dispose(); } catch (Exception e) {}
+            try { existingDisposable.dispose(); } catch (Exception e) { u.logDebug("cancelImageLoad: dispose failed: " + e.getMessage()); }
             disposableMap.remove(imageView);
         }
     }
@@ -243,7 +244,7 @@ ui() {
                             appData[1] = (label != null ? label : appName);
                             appData[2] = intent;
                             apps.add(appData);
-                        } catch (Exception e) {}
+                        } catch (Exception e) { u.logToFile("Error getting app info for " + accountType + ": " + e.getMessage()); }
                     }
                 } finally {
                     u.closeQuietly(cursor);
@@ -325,6 +326,7 @@ ui() {
                         context.startActivity(finalIntent);
                         dialog.dismiss();
                     } catch (Exception e) {
+                        u.logToFile("showContactViaDialog: cannot open app: " + e.getMessage());
                         tasker.showToast("Cannot open app");
                     }
                 }
@@ -825,16 +827,20 @@ ui() {
                 dataArray = json.getJSONArray("data");
                 if (dataArray.length() > 0) {
                     dataObj = dataArray.getJSONObject(0);
-                    if (dataObj.has("countryCode")) fields.add("country code");
-                    if (dataObj.has("dialingCode")) fields.add("dialing code");
+                    phone0 = null;
                     if (dataObj.has("phones")) {
                         phones = dataObj.getJSONArray("phones");
-                        if (phones.length() > 0 && phones.getJSONObject(0).has("carrier")) {
+                        if (phones.length() > 0) phone0 = phones.getJSONObject(0);
+                    }
+                    if (dataObj.has("countryCode") || (phone0 != null && phone0.has("countryCode"))) fields.add("country code");
+                    if (dataObj.has("dialingCode") || (phone0 != null && phone0.has("dialingCode"))) fields.add("dialing code");
+                    if (phone0 != null) {
+                        if (phone0.has("carrier")) {
                             fields.add("carrier");
                         }
                     }
                 }
-            } catch (Exception e) {}
+            } catch (Exception e) { u.logToFile("showUserFiltersEdit: error reading details JSON for field list: " + e.getMessage()); }
         }
         
         fieldDisplay = new TextView(activity);
@@ -885,8 +891,14 @@ ui() {
                                     dataArray = json.getJSONArray("data");
                                     if (dataArray.length() > 0) {
                                         dataObj = dataArray.getJSONObject(0);
-                                        if (selectedText.equals("country code") && dataObj.has("countryCode")) {
+                                        phone0 = null;
+                                        if (dataObj.has("phones") && dataObj.getJSONArray("phones").length() > 0) phone0 = dataObj.getJSONArray("phones").getJSONObject(0);
+                                        if (selectedText.equals("country code") && phone0 != null && phone0.has("countryCode")) {
+                                            valueInput.setText(phone0.getString("countryCode"));
+                                        } else if (selectedText.equals("country code") && dataObj.has("countryCode")) {
                                             valueInput.setText(dataObj.getString("countryCode"));
+                                        } else if (selectedText.equals("dialing code") && phone0 != null && phone0.has("dialingCode")) {
+                                            valueInput.setText(phone0.getString("dialingCode"));
                                         } else if (selectedText.equals("dialing code") && dataObj.has("dialingCode")) {
                                             valueInput.setText(dataObj.getString("dialingCode"));
                                         } else if (selectedText.equals("carrier") && dataObj.has("phones")) {
@@ -896,7 +908,7 @@ ui() {
                                             }
                                         }
                                     }
-                                } catch (Exception e) {}
+                                } catch (Exception e) { u.logToFile("showUserFiltersEdit: error reading carrier from details JSON: " + e.getMessage()); }
                             }
                             ((android.app.AlertDialog)dialogRef[0]).dismiss();
                         }
@@ -1310,6 +1322,7 @@ ui() {
                 // Check exact match, or handle Tasker's default fallback name
                 if (label.equals(taskLabel)) {
                     if (killExisting) {
+                        u.logDebug("handleExistingTask: finishing existing task '" + label + "'");
                         task.finishAndRemoveTask();
                         return null;
                     } else {
@@ -1339,12 +1352,13 @@ ui() {
     }
 
     cleanup() {
+        u.logDebug("ui.cleanup: releasing handlers, executor and image loader");
         mainHandler.removeCallbacksAndMessages(null);
         if (executorService != null) executorService.shutdownNow();
         if (disposableMap != null) {
             valuesArray = disposableMap.values().toArray();
             for (int i = 0; i < valuesArray.length; i++) {
-                try { valuesArray[i].dispose(); } catch (Exception e) {}
+                try { valuesArray[i].dispose(); } catch (Exception e) { u.logDebug("ui.cleanup: dispose failed: " + e.getMessage()); }
             }
             disposableMap.clear();
         }
@@ -1693,7 +1707,10 @@ ui() {
             palette.put("error", "#B00020");
             palette.put("on-error", "#FFFFFF");
             return palette;
-        } catch (Exception e) { return null; }
+        } catch (Exception e) {
+            u.logToFile("Material You extraction failed or unsupported: " + e.getMessage());
+            return null;
+        }
     }
 
     hslToHex(hVal, sVal, lVal) {
@@ -1841,7 +1858,9 @@ ui() {
                 tasker.setVariable(varName, isChecked ? "true" : "false");
                 taskVars = new java.util.HashMap();
                 taskVars.put("par1", "enable");
-                tasker.callTask("Truecaller - Helper", taskVars);
+                started = tasker.callTask("Truecaller - Helper", taskVars);
+                u.logDebug("Setting " + varName + " = " + isChecked + ", Helper task started=" + started);
+                if (!started) u.logToFile("Failed to start task 'Truecaller - Helper' after changing " + varName);
                 drawable = isChecked ? checkedDrawable : uncheckedDrawable;
                 if (drawable != null) buttonView.setButtonDrawable(drawable);
             }
@@ -2015,7 +2034,7 @@ ui() {
                         updateBg.setCornerRadius(u.dpToPx(8));
                         updateBg.setColor(newColor);
                         previewBox.setBackground(updateBg);
-                    } catch (Exception e) {}
+                    } catch (Exception e) { u.logDebug("Color preview: invalid color '" + colorText + "'"); }
                 }
             }
         });
@@ -2095,6 +2114,7 @@ ui() {
                     try {
                         Color.parseColor(colorText);
                         tasker.setVariable("TC_theme", colorText);
+                        u.logDebug("Custom theme color set: " + colorText);
                         reloadColors();
                         if (onThemeChanged != null) { onThemeChanged.run(); }
                         
@@ -2107,6 +2127,7 @@ ui() {
                         tasker.showToast("Theme updated");
                         showSettingsDialog(activity, onThemeChanged);
                     } catch (Exception e) { 
+                        u.logToFile("Error applying custom theme color: " + e.toString());
                         tasker.showToast("Error: " + (e.getCause() != null ? e.getCause().toString() : e.toString())); 
                     }
                 } else {
@@ -2189,6 +2210,7 @@ ui() {
                             pickerButton.setText(selectedValue);
                             if (oldValue != null && !oldValue.equals(selectedValue)) {
                                 tasker.setVariable(varName, selectedValue);
+                                u.logDebug("Setting " + varName + " = " + selectedValue);
                                 if (varName.equals("TC_theme")) {
                                     reloadColors();
                                     if (onThemeChanged != null) { onThemeChanged.run(); }
@@ -2204,6 +2226,7 @@ ui() {
                                 }
                             } else if (oldValue == null) {
                                 tasker.setVariable(varName, selectedValue);
+                                u.logDebug("Setting " + varName + " = " + selectedValue);
                             }
                             dialog.dismiss();
                         }
@@ -2424,8 +2447,8 @@ ui() {
         updateCheckbox = createThemedCheckbox(activity, "TC_update_check", false);
         generalTab.addView(createSettingItem(activity, "Auto-check for updates", updateCheckbox));
         
-        debugCheckbox = createThemedCheckbox(activity, "TC_debug_enabled", false);
-        generalTab.addView(createSettingItem(activity, "Enable debug logging", debugCheckbox));
+        logLevelOptions = new String[]{"None", "Default", "Debug"};
+        generalTab.addView(createSettingPickerButton(activity, "Log Level", "TC_log_level", logLevelOptions, "None", dialog, null));
         
         sdkStr = tasker.getVariable("SDK");
         sdk = sdkStr != null ? Integer.parseInt(sdkStr) : 30;
@@ -2472,6 +2495,7 @@ ui() {
                                 
                                 oldPath = tasker.getVariable("TC_dbpath");
                                 newPath = realDir + "/Truecaller.db";
+                                u.logDebug("Moving database " + oldPath + " -> " + newPath);
                                 
                                 if (oldPath != null && !oldPath.equals(newPath)) {
                                     oldFile = new java.io.File(oldPath);
@@ -2490,6 +2514,7 @@ ui() {
                                 }
                                 
                                 tasker.setVariable("TC_dbpath", newPath);
+                                u.logDebug("TC_dbpath updated to " + newPath);
                                 tasker.showToast("Database path updated successfully");
                                 
                                 /* Update the UI element safely on the main thread */
@@ -2507,6 +2532,7 @@ ui() {
                                 });
                             }
                         } catch (Exception e) {
+                            u.logToFile("Error moving database: " + e.getMessage());
                             tasker.showToast("Error moving DB: " + e.getMessage());
                         }
                     }
@@ -2542,7 +2568,9 @@ ui() {
         updatesBtn.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         updatesBtn.setOnClickListener(new View.OnClickListener() {
             onClick(View v) {
-                tasker.callTask("Truecaller - Update Database", new java.util.HashMap());
+                started = tasker.callTask("Truecaller - Update Database", new java.util.HashMap());
+                u.logDebug("Manual database update requested, task started=" + started);
+                if (!started) u.logToFile("Failed to start task 'Truecaller - Update Database'");
             }
         });
         actionsContainer.addView(updatesBtn);
@@ -2973,6 +3001,7 @@ ui() {
                                 sel = ((TextView)v2).getText().toString();
                                 display.setText(sel);
                                 tasker.setVariable(varName, sel);
+                                u.logDebug("Setting " + varName + " = " + sel);
                                 if (daysRowToToggle != null) {
                                     daysRowToToggle.setVisibility("Within Days".equals(sel) ? View.VISIBLE : View.GONE);
                                 }

@@ -14,6 +14,7 @@ d = data();
 
 number = tasker.getVariable("par1");
 if (!u.isValidString(number) || !Patterns.PHONE.matcher(number).matches()) {
+    u.logDebug("getDetails: ignoring invalid or empty number: " + number);
     return;
     //throw new JavaCodeException("par1 (phone number) is required");
 }
@@ -23,16 +24,20 @@ fetchBlockReason = "true".equals(par2); // Default to true
 
 par3 = tasker.getVariable("par3");
 fetchIfOld = !"false".equals(par3); // Default to true
+u.logDebug("getDetails: number=" + number + " fetchBlockReason=" + fetchBlockReason + " fetchIfOld=" + fetchIfOld);
 
 details = d.loadNumberDetails(number);
 shouldFetch = d.needsUpdate(details);
 
 if (shouldFetch && !fetchIfOld) shouldFetch = false;
+u.logDebug("getDetails: cached=" + (details != null) + " shouldFetch=" + shouldFetch);
 
 if (shouldFetch) {
     try {
         details = d.fetchFromTruecaller(number);
     } catch (Exception e) {
+        /* The fetch error itself is already logged by data.fetchFromTruecaller. */
+        u.logDebug("getDetails: fetch failed, using cached details: " + (details != null));
         tasker.showToast(e.getMessage());
         if (details == null) {
             return tasker.toJson(new HashMap());
@@ -64,4 +69,5 @@ if (fetchBlockReason) {
     }
 }
 
+u.logDebug("getDetails: done number=" + number + " found=" + (details != null) + " block_reason=" + responseMap.get("block_reason"));
 return tasker.toJson(responseMap, true);

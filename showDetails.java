@@ -22,18 +22,20 @@ vd = viewDetail(uiObj);
 
 par1 = tasker.getVariable("par1");
 if (!u.isValidString(par1) || !Patterns.PHONE.matcher(par1).matches()) {
+    u.logToFile("showDetails: invalid number in par1: " + par1);
     tasker.showToast("Truecaller - Invalid number");
     return;
 }
 
 detailNumber = par1;
+u.logDebug("showDetails: opening detail view for " + detailNumber);
 vd.isStandalone = true;
 
 currentAppTask = null;
 rootContainer = null;
 
 cleanup() {
-    u.logToFile("Cleaning up standalone detail resources...");
+    u.logDebug("showDetails: cleaning up standalone detail resources...");
     uiObj.cleanup();
 }
 
@@ -43,6 +45,7 @@ uiObj.handleExistingTask("Truecaller-Detail", true);
 activityConsumer = new Consumer() {
     accept(activityObj) {
         activity = activityObj;
+        try {
         activity.getWindow().setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
         activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
         activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
@@ -78,6 +81,11 @@ activityConsumer = new Consumer() {
                 cleanup();
             }
         });
+        } catch (Exception e) {
+            u.logToFile("showDetails: failed to build detail view: " + e.getMessage());
+            cleanup();
+            activityObj.finishAndRemoveTask();
+        }
     }
 };
 

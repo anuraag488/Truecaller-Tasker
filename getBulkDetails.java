@@ -13,6 +13,7 @@ d = data();
 
 numbersStr = tasker.getVariable("par1");
 if (!u.isValidString(numbersStr)) {
+    u.logDebug("getBulkDetails: par1 is empty, nothing to do");
     return;
 }
 
@@ -35,6 +36,7 @@ for (int i = 0; i < numArr.length; i++) {
 }
 
 if (list.isEmpty()) {
+    u.logDebug("getBulkDetails: no valid numbers in par1");
     return;
 }
 
@@ -56,6 +58,8 @@ for (int i = 0; i < list.size(); i++) {
     }
 }
 
+u.logDebug("getBulkDetails: " + list.size() + " numbers, " + numbersToFetch.size() + " to fetch, fetchBlockReason=" + fetchBlockReason + " fetchIfOld=" + fetchIfOld);
+
 /* 2. Fetch only the outdated/missing numbers from Truecaller */
 if (!numbersToFetch.isEmpty()) {
     try {
@@ -68,6 +72,8 @@ if (!numbersToFetch.isEmpty()) {
             }
         }
     } catch (Exception e) {
+        /* The fetch error itself is already logged by data.fetchBulkFromTruecaller. */
+        u.logDebug("getBulkDetails: bulk fetch failed, continuing with cached results");
         tasker.showToast("Bulk fetch error: " + e.getMessage());
     }
 }
@@ -107,4 +113,5 @@ for (int i = 0; i < requestedKeys.length; i++) {
     formattedResults.put(key, itemMap);
 }
 
+u.logDebug("getBulkDetails: returning " + formattedResults.size() + " results");
 return tasker.toJson(formattedResults, true);

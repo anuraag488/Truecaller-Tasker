@@ -14,6 +14,7 @@ u = util();
 d = data();
 
 callLogUri = Uri.parse("content://call_log/calls");
+u.logDebug("updateCallLogNames: scanning call log for blank names");
 
 // 1. Gather all unique numbers that have a blank name
 projection = new String[]{"number"};
@@ -39,6 +40,8 @@ try {
         cursor.close();
     }
 }
+
+u.logDebug("updateCallLogNames: " + uniqueMap.size() + " unique numbers with blank names");
 
 // 2. Iterate through unique numbers and update all their matching rows at once
 updatedRowsCount = 0;
@@ -76,6 +79,7 @@ for (int i = 0; i < keys.length; i++) {
             rows = context.getContentResolver().update(callLogUri, cv, updateSelection, selectionArgs);
             if (rows > 0) {
                 updatedRowsCount += rows;
+                if (u.isDebug()) u.logDebug("updateCallLogNames: " + rows + " rows for " + number + " -> " + formattedName);
             }
         } catch (Exception e) {
             u.logToFile("Error updating number " + number + ": " + e.getMessage());
@@ -83,4 +87,4 @@ for (int i = 0; i < keys.length; i++) {
     }
 }
 
-u.logToFile("Updated " + updatedRowsCount + " call log entries.");
+u.logDebug("updateCallLogNames: updated " + updatedRowsCount + " call log entries.");

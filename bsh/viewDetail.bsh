@@ -49,9 +49,11 @@ viewDetail(ui) {
             callLogUri = android.net.Uri.parse("content://call_log/calls");
             selection = "number = ? OR normalized_number = ?";
             selectionArgs = new String[]{number, e164Number};
-            context.getContentResolver().delete(callLogUri, selection, selectionArgs);
+            deleted = context.getContentResolver().delete(callLogUri, selection, selectionArgs);
+            u.logDebug("deleteFromCallLog: " + number + " rows deleted=" + deleted);
             tasker.showToast("Deleted from call log");
         } catch(Exception e) {
+            u.logToFile("deleteFromCallLog failed for " + number + ": " + e.getMessage());
             tasker.showToast("Delete failed: " + e.getMessage());
         }
     }
@@ -62,8 +64,10 @@ viewDetail(ui) {
             inClause = TextUtils.join(",", idsList);
             selection = "_id IN (" + inClause + ")";
             deleted = context.getContentResolver().delete(callLogUri, selection, null);
+            u.logDebug("deleteSpecificCallLogs: ids=" + inClause + " rows deleted=" + deleted);
             tasker.showToast("Deleted " + deleted + " call(s)");
         } catch(Exception e) {
+            u.logToFile("deleteSpecificCallLogs failed: " + e.getMessage());
             tasker.showToast("Delete failed: " + e.getMessage());
         }
     }
@@ -74,8 +78,10 @@ viewDetail(ui) {
             e164Number = u.convertToE164(number);
             db = d.getWritableDb();
             db.execSQL("DELETE FROM data WHERE number_e164 = ?", new String[]{e164Number});
+            u.logDebug("deleteFromDatabase: removed " + e164Number);
             tasker.showToast("Deleted from database");
         } catch(Exception e) {
+            u.logToFile("deleteFromDatabase failed for " + number + ": " + e.getMessage());
             tasker.showToast("Delete failed: " + e.getMessage());
         } finally {
             u.closeQuietly(db);
@@ -180,7 +186,7 @@ viewDetail(ui) {
                                             jsonName = dataObj.getString("name");
                                         }
                                     }
-                                } catch(Exception e) {}
+                                } catch(Exception e) { u.logToFile("showInputDialog: error reading original name from JSON: " + e.getMessage()); }
                             }
                         }
                         if (newValue.isEmpty()) {
@@ -198,9 +204,11 @@ viewDetail(ui) {
                             tasker.showToast("Name updated");
                         }
                     }
+                    u.logDebug("showInputDialog: saved " + (isNote ? "note" : "name") + " for " + number);
                     refreshDetailView(activity, number);
                     dialog.dismiss();
                 } catch(Exception e) {
+                    u.logToFile("showInputDialog: failed to update " + (isNote ? "note" : "name") + " for " + number + ": " + e.getMessage());
                     tasker.showToast("Failed to update: " + e.getMessage());
                 } finally {
                     u.closeQuietly(cursor);
@@ -222,6 +230,7 @@ viewDetail(ui) {
         ui.executorService.submit(new Runnable() {
             run() {
                 try {
+                    u.logDebug("fetchAndUpdate: fetching fresh data for " + number);
                     d.fetchFromTruecaller(number);
                     ui.mainHandler.post(new Runnable() {
                         run() {
@@ -476,6 +485,7 @@ viewDetail(ui) {
                     activity.startActivity(intent);
                     tasker.showToast("WhatsApp Call");
                 } catch(Exception e) {
+                    u.logToFile("WhatsApp call launch failed: " + e.getMessage());
                     tasker.showToast("WhatsApp not installed");
                 }
                 return true;
@@ -503,6 +513,7 @@ viewDetail(ui) {
                     activity.startActivity(intent);
                     tasker.showToast("WhatsApp Message");
                 } catch(Exception e) {
+                    u.logToFile("WhatsApp message launch failed: " + e.getMessage());
                     tasker.showToast("WhatsApp not installed");
                 }
                 return true;
@@ -537,6 +548,7 @@ viewDetail(ui) {
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                         activity.startActivity(intent);
                     } catch(Exception e) {
+                        u.logToFile("Save contact launch failed: " + e.getMessage());
                         tasker.showToast("Cannot save contact");
                     }
                 }
@@ -564,8 +576,8 @@ viewDetail(ui) {
                             db = d.getWritableDb();
                             rowsDeleted = db.delete("filters", "type = ? AND field = ? AND value = ?",
                                 new String[]{"Block", "number", e164Number});
-                            if (rowsDeleted > 0) u.logToFile("Deleted user filter for: " + e164Number);
-                            else u.logToFile("No matching filter found");
+                            if (rowsDeleted > 0) u.logDebug("Deleted user filter for: " + e164Number);
+                            else u.logDebug("No matching filter found for " + e164Number);
                         } catch (Exception e) {
                             u.logToFile("Error deleting filter: " + e.getMessage());
                             tasker.showToast("Failed to unblock: " + e.getMessage());
@@ -610,6 +622,7 @@ viewDetail(ui) {
                             closeDetailsView(activity, false);
                             if (onDeleted != null) onDeleted.run();
                         } catch(Exception e) {
+                            u.logToFile("Delete failed for " + number + ": " + e.getMessage());
                             tasker.showToast("Delete failed: " + e.getMessage());
                         }
                     }
@@ -626,6 +639,7 @@ viewDetail(ui) {
                             closeDetailsView(activity, false);
                             if (onDeleted != null) onDeleted.run();
                         } catch(Exception e) {
+                            u.logToFile("Delete everything failed for " + number + ": " + e.getMessage());
                             tasker.showToast("Delete failed: " + e.getMessage());
                         }
                     }
@@ -687,8 +701,9 @@ viewDetail(ui) {
         details = d.loadNumberDetails(number);
         csName = d.getPhoneBookName(number);
         shouldFetch = d.needsUpdate(details);
-        if (shouldFetch) u.logToFile("Data needs update, will fetch in background");
+        if (shouldFetch) u.logDebug("createDetailView: data for " + number + " needs update, will fetch in background");
         blockReason = d.getBlockReason(number, csName, details);
+        u.logDebug("createDetailView: " + number + " csName=" + csName + " blockReason=" + blockReason + " shouldFetch=" + shouldFetch);
 
         populateDetailView(activity, contentLayout, number, details, csName, blockReason);
 

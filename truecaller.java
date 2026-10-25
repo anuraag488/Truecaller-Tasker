@@ -70,9 +70,11 @@ taskDescription = "Truecaller-List";
 
 existingTask = uiObj.handleExistingTask(taskDescription, false);
 if (existingTask != null) {
+    u.logDebug("truecaller: list view already open, moving to front");
     existingTask.moveToFront();
     return;
 }
+u.logDebug("truecaller: opening list view");
 
 currentTab = "calllog";
 callLogData = new ArrayList();
@@ -153,6 +155,7 @@ performLiveSearch(query) {
     final String finalQuery = query;
     executorService.submit(new Runnable() {
         run() {
+            try {
             callLogResults = loadCallLogData(finalQuery);
             if (thisSearchId != currentSearchId.get()) return;   // atomic read
             truecallerResults = loadTruecallerLogData(finalQuery);
@@ -195,6 +198,9 @@ performLiveSearch(query) {
                     if (mainListView != null) mainListView.setSelection(0);
                 }
             });
+            } catch (Exception e) {
+                u.logToFile("performLiveSearch failed for '" + finalQuery + "': " + e.getMessage());
+            }
         }
     });
 }
@@ -233,6 +239,7 @@ loadAllContacts() {
         u.closeQuietly(cursor);
     }
     cachedContactsList = list;
+    u.logDebug("loadAllContacts: cached " + list.size() + " contacts");
     return list;
 }
 
@@ -259,17 +266,19 @@ loadAllContactPhotos(forceRefresh) {
         u.closeQuietly(cursor);
     }
     cachedContactPhotos = map;
+    u.logDebug("loadAllContactPhotos: cached " + map.size() + " photos");
     return map;
 }
 
 cleanup() {
-    u.logToFile("Cleaning up resources...");
+    u.logDebug("truecaller: cleaning up resources...");
     executorService.shutdownNow();
     uiObj.cleanup();
 }
 
 loadCallLogData(searchQuery) {
     list = new ArrayList();
+    loadStart = System.currentTimeMillis();
     db = null;
     cursor = null;
     
@@ -325,6 +334,7 @@ loadCallLogData(searchQuery) {
             u.closeQuietly(cursor);
             cursor = null;
         }
+        u.logDebug("loadCallLogData: read " + rawCalls.size() + " call log rows, " + uniqueNumbers.size() + " unique numbers");
 
         tcDataMap = new HashMap();
         db = d.getReadableDb();
@@ -495,6 +505,7 @@ loadCallLogData(searchQuery) {
         u.closeQuietly(cursor);
         u.closeQuietly(db);
     }
+    u.logDebug("loadCallLogData: query='" + searchQuery + "' grouping=" + groupingSettings + " -> " + list.size() + " rows in " + (System.currentTimeMillis() - loadStart) + "ms");
     return list;
 }
 
@@ -568,6 +579,7 @@ loadTruecallerLogData(searchQuery) {
         u.closeQuietly(cursor);
         u.closeQuietly(db);
     }
+    u.logDebug("loadTruecallerLogData: query='" + searchQuery + "' -> " + list.size() + " rows");
     return list;
 }
 
@@ -581,7 +593,7 @@ searchContacts(searchQuery) {
     
     p = null;
     if (isT9) {
-        try { p = Pattern.compile(getT9Regex(searchQuery)); } catch(Exception e) {}
+        try { p = Pattern.compile(getT9Regex(searchQuery)); } catch(Exception e) { u.logToFile("T9 Regex compile error: " + e.getMessage()); }
     }
 
     for (int i = 0; i < allContacts.size(); i++) {
@@ -614,6 +626,7 @@ searchContacts(searchQuery) {
             results.add(entry);
         }
     }
+    u.logDebug("searchContacts: query='" + searchQuery + "' matched " + results.size() + " of " + allContacts.size() + " contacts");
     return results;
 }
 
@@ -672,6 +685,7 @@ showClearConfirmation(activity, title, message, taskParam) {
                 if ("clear_call_log".equals(taskParam)) {
                     tasker.showToast("Feature not added");
                 } else if ("clear_truecaller_log".equals(taskParam)) {
+                    u.logDebug("Clearing Truecaller log table");
                     db.execSQL("DELETE FROM data");
                     tasker.showToast("Truecaller log cleared");
                 }
@@ -681,6 +695,7 @@ showClearConfirmation(activity, title, message, taskParam) {
                     }
                 }, 500);
             } catch(Exception e) {
+                u.logToFile("Failed to clear log: " + e.getMessage());
                 tasker.showToast("Failed to clear: " + e.getMessage());
             } finally {
                 u.closeQuietly(db);
@@ -808,6 +823,7 @@ showStyledMenuDialog(activity) {
                                 }
                                 if (result.isEmpty()) result = "none";
                                 tasker.setVariable("TC_call_log_grouping", result);
+                                u.logDebug("TC_call_log_grouping set to " + result);
                                 groupDialog.dismiss();
                                 refreshListView();
                             }
@@ -900,6 +916,7 @@ showContextMenu(activity, entry) {
                     contextMenuDialog.dismiss();
                     number = entry[1];
                     name = entry[0];
+                    u.logDebug("Context menu: action " + menuIndex + " for " + number);
                     
                     if (menuIndex == 0) {
                         u.makeCall(number);
@@ -937,6 +954,7 @@ showContextMenu(activity, entry) {
                                     }
                                     removeCardFromUi(entry);
                                 } catch(Exception e) {
+                                    u.logToFile("Delete failed for " + number + ": " + e.getMessage());
                                     tasker.showToast("Delete failed: " + e.getMessage());
                                 }
                             }
@@ -1266,6 +1284,8 @@ void loadTabData(String tab) {
   
   executorService.submit(new Runnable() {
     run() {
+      try {
+      u.logDebug("loadTabData: loading " + finalTab);
       freshData = finalTab.equals("calllog") ? loadCallLogData(null) : loadTruecallerLogData(null);
       
       uiObj.mainHandler.post(new Runnable() {
@@ -1281,6 +1301,9 @@ void loadTabData(String tab) {
           }
         }
       });
+      } catch (Exception e) {
+          u.logToFile("loadTabData failed for " + finalTab + ": " + e.getMessage());
+      }
     }
   });
 }
@@ -1500,6 +1523,7 @@ bindListRowView(rowView, entry, activity) {
                 executorService.submit(new Runnable() {
                     run() {
                         try {
+                            u.logDebug("Search row: fetching " + searchNumber + " from Truecaller");
                             Object[] fetchedDetails = d.fetchFromTruecaller(searchNumber);
                             
                             uiObj.mainHandler.post(new Runnable() {
@@ -1728,7 +1752,7 @@ createListView(activity) {
                 details = d.loadNumberDetails(searchQuery);
                 if (d.needsUpdate(details)) {
                     tasker.showToast("Fetching fresh data...");
-                    u.logToFile("Fetching fresh data...");
+                    u.logDebug("Search: stale or missing data for " + searchQuery + ", fetching from Truecaller");
           			    final String finalSearchQuery = searchQuery;
                     executorService.submit(new Runnable() {
                         run() {
@@ -1736,11 +1760,11 @@ createListView(activity) {
                                 d.fetchFromTruecaller(finalSearchQuery);
                             } catch (Exception e) {
                                 tasker.showToast(e.getMessage());
-                                u.logToFile(e.getMessage());
+                                u.logToFile("Search fetch failed for " + finalSearchQuery + ": " + e.getMessage());
                             }
                             uiObj.mainHandler.post(new Runnable() {
                                 run() {
-                                    u.logToFile("Performing search");
+                                    u.logDebug("Search: fetch finished, performing search");
                                     performSearch(finalSearchQuery);
                                 }
                             });
@@ -1755,6 +1779,8 @@ createListView(activity) {
       	final String finalQuery = query;
             executorService.submit(new Runnable() {
                 run() {
+                    try {
+                    u.logDebug("performSearch: query='" + finalQuery + "'");
                     callLogResults = loadCallLogData(finalQuery);
                     truecallerResults = loadTruecallerLogData(finalQuery);
                     contactsResults = searchContacts(finalQuery);
@@ -1777,6 +1803,9 @@ createListView(activity) {
                             tasker.showToast("Found " + searchResults.size() + " results");
                         }
                     });
+                    } catch (Exception e) {
+                        u.logToFile("performSearch failed for '" + finalQuery + "': " + e.getMessage());
+                    }
                 }
             });
         }
@@ -2008,6 +2037,7 @@ createListView(activity) {
 activityConsumer = new Consumer() {
     accept(activityObj) {
         activity = activityObj;
+        try {
         
         // 1. Initialize the Dialog FIRST so we can apply flags to it
         mainDialog = new android.app.Dialog(activity, android.R.style.Theme_DeviceDefault_NoActionBar);
@@ -2017,6 +2047,7 @@ activityConsumer = new Consumer() {
         // --- LOCKSCREEN LOGIC START ---
         km = activity.getSystemService(Context.KEYGUARD_SERVICE);
         isLocked = km != null && km.isKeyguardLocked();
+        u.logDebug("truecaller: keyguard locked=" + isLocked);
 
         if (isLocked) {
             // A. Apply lockscreen flags to the Activity
@@ -2085,12 +2116,12 @@ activityConsumer = new Consumer() {
         
         mainDialog.setOnDismissListener(new android.content.DialogInterface.OnDismissListener() {
             onDismiss(android.content.DialogInterface dAlert) {
-                u.logToFile("closing truecaller list view");
+                u.logDebug("closing truecaller list view");
                 
                 // Unregister the screen off receiver if it exists
                 rec = activity.getWindow().getDecorView().getTag();
                 if (rec != null) {
-                    try { activity.unregisterReceiver(rec); } catch (Exception e) {}
+                    try { activity.unregisterReceiver(rec); } catch (Exception e) { u.logToFile("Error unregistering screen-off receiver: " + e.getMessage()); }
                 }
                 
                 cleanup();
@@ -2103,6 +2134,11 @@ activityConsumer = new Consumer() {
         });
         
         mainDialog.show();
+        } catch (Exception e) {
+            u.logToFile("Failed to open Truecaller list view: " + e.getMessage());
+            cleanup();
+            activityObj.finish();
+        }
     }
 };
 
