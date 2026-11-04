@@ -25,6 +25,23 @@
 
 ## Changelog
 
+### 2026-11-04
+* Improved phone number handling by sanitizing input and removing invisible characters.
+* Improved contact name and photo lookup using Android's Phone Lookup API.
+* Improved user filters. Filters now support more reliable matching, editing, enabling/disabling and deletion, including duplicate values across different fields.
+* Improved wildcard filter matching and escaping of special characters.
+* Added automatic handling of unauthorized Truecaller API responses. Invalid installation credentials are cleared and related profiles are disabled.
+* Improved database handling with a schema update, migration and Write-Ahead Logging.
+* Improved caching and resource cleanup to prevent database and network resource leaks.
+* Improved search results, including automatic Truecaller lookup for eligible phone numbers.
+* Improved call log and Truecaller list refresh behavior.
+* Improved detail view handling when block/unblock settings are changed.
+* Improved overlay and UI cleanup.
+
+2026-10-25
+
+* Changed the default logging level from None to Default.
+
 ### 2026-10-03
 * Added Get Bulk Details Task
 * Improved search
