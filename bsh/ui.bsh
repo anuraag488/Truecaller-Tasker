@@ -57,8 +57,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 ui() {
-    u = util();
-    d = data();
+    /* Reuse caller's u and d if already defined in scope, otherwise create them */
+    if (u == null || u == void) u = util();
+    if (d == null || d == void) d = data();
 
     LONG_PRESS_DELAY = 500;
     mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
@@ -209,8 +210,12 @@ ui() {
 
         cursor1 = null;
         try {
+            lookupUri = android.net.Uri.withAppendedPath(
+                android.provider.ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+                android.net.Uri.encode(e164Number)
+            );
             projection1 = new String[]{"contact_id"};
-            cursor1 = context.getContentResolver().query(contactsUri, projection1, "data4 = ?", new String[]{e164Number}, null);
+            cursor1 = context.getContentResolver().query(lookupUri, projection1, null, null, null);
 
             while (cursor1 != null && cursor1.moveToNext()) {
                 contactId = cursor1.getString(0);
@@ -533,6 +538,7 @@ ui() {
         toggleParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         toggleParams.rightMargin = u.dpToPx(8);
         toggle.setLayoutParams(toggleParams);
+        finalFieldForToggle = field;
         finalValue = value;
         toggle.setOnClickListener(new View.OnClickListener() {
             onClick(View v) {
@@ -544,7 +550,7 @@ ui() {
                     icon.setTint(getColorInt("primary"));
                     checkBox.setCompoundDrawablesWithIntrinsicBounds(icon, null, null, null);
                 }
-                d.toggleFilter(finalValue, newState);
+                d.toggleFilter(finalFieldForToggle, finalValue, newState);
                 tasker.showToast("Filter " + (newState ? "enabled" : "disabled"));
             }
         });
@@ -643,8 +649,9 @@ ui() {
             }
         });
         actionsLayout.addView(editButton);
-        
+
         deleteButton = createIconButton(activity, "mw_action_delete_forever", "#C62828");
+        finalFieldForDelete = field;
         finalValueForDelete = value;
         finalCleanValue = cleanValue;
         
@@ -652,7 +659,7 @@ ui() {
             onClick(View v) {
                 confirmAction = new Runnable() {
                     run() {
-                        d.deleteFilter(finalValueForDelete);
+                        d.deleteFilter(finalFieldForDelete, finalValueForDelete);
                         tasker.showToast("Filter deleted");
                         refreshRunnable.run();
                     }
@@ -1047,6 +1054,7 @@ ui() {
         
         saveButton = createStyledButton(activity, oldValue == null ? "Save" : "Update", "mw_content_save", "primary", "on-primary");
         saveButton.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+        finalOldField = field;
         finalOldValue = oldValue;
         saveButton.setOnClickListener(new View.OnClickListener() {
             onClick(View v) {
@@ -1054,9 +1062,12 @@ ui() {
                 selectedField = fieldDisplay.getText().toString();
                 selectedMatch = matchDisplay.getText().toString();
                 enteredValue = valueInput.getText().toString().trim();
+                if (selectedField.equals("number")) {
+                    enteredValue = u.sanitizeNumber(enteredValue);
+                }
                 enteredNote = noteInput.getText().toString().trim();
                 
-                if (enteredValue.isEmpty()) {
+                if (!u.isValidString(enteredValue)) {
                     tasker.showToast("Value cannot be empty");
                     return;
                 }
@@ -1066,12 +1077,13 @@ ui() {
                 else if (selectedMatch.equals("starts with")) formattedValue = enteredValue + "*";
                 else if (selectedMatch.equals("ends with")) formattedValue = "*" + enteredValue;
                 
-                // ONLY apply E164 formatting if it is an exact match!
                 if (selectedField.equals("number") && selectedMatch.equals("matches") && !enteredValue.contains("*")) {
                     formattedValue = u.convertToE164(enteredValue);
                 }
                 
-                if (finalOldValue != null) d.deleteFilter(finalOldValue);
+                if (finalOldValue != null && finalOldField != null) {
+                    d.deleteFilter(finalOldField, finalOldValue);
+                }
                 
                 d.saveFilter(selectedType, selectedField, formattedValue, enteredNote);
                 tasker.showToast("Filter " + (finalOldValue == null ? "added" : "updated"));
@@ -1170,12 +1182,18 @@ ui() {
                         matchCount++;
                     } else {
                         cleanValue = filterValue.replace("*", "").toLowerCase();
+                        noteLower = filterNote != null ? filterNote.toLowerCase() : "";
+                        fieldLower = filterField != null ? filterField.toLowerCase() : "";
                         matchType = getMatchType(filterValue);
-                        filterMatches = false;
-                        if (matchType.equals("matches")) filterMatches = searchQuery.equals(cleanValue);
-                        else if (matchType.equals("contains")) filterMatches = searchQuery.contains(cleanValue);
-                        else if (matchType.equals("starts with")) filterMatches = searchQuery.startsWith(cleanValue);
-                        else if (matchType.equals("ends with")) filterMatches = searchQuery.endsWith(cleanValue);
+                        
+                        /* Match if the search query appears in the value, note, field, or if the pattern itself matches the query */
+                        filterMatches = cleanValue.contains(searchQuery) || noteLower.contains(searchQuery) || fieldLower.contains(searchQuery);
+                        if (!filterMatches) {
+                            if (matchType.equals("matches")) filterMatches = searchQuery.equals(cleanValue);
+                            else if (matchType.equals("contains")) filterMatches = searchQuery.contains(cleanValue);
+                            else if (matchType.equals("starts with")) filterMatches = searchQuery.startsWith(cleanValue);
+                            else if (matchType.equals("ends with")) filterMatches = searchQuery.endsWith(cleanValue);
+                        }
                         
                         if (filterMatches) {
                             card = createFilterCard(activity, rootLayout, dialog, state, filterType, filterField, filterValue, filterEnabled, filterNote, this);
@@ -1352,7 +1370,7 @@ ui() {
     }
 
     cleanup() {
-        u.logDebug("ui.cleanup: releasing handlers, executor and image loader");
+        u.logDebug("ui.cleanup: releasing handlers, executor, image loader and db");
         mainHandler.removeCallbacksAndMessages(null);
         if (executorService != null) executorService.shutdownNow();
         if (disposableMap != null) {
@@ -1364,6 +1382,9 @@ ui() {
         }
         if (imageLoader != null) {
             imageLoader.shutdown();
+        }
+        if (d != null) {
+            d.close();
         }
     }
     
@@ -2498,18 +2519,36 @@ ui() {
                                 u.logDebug("Moving database " + oldPath + " -> " + newPath);
                                 
                                 if (oldPath != null && !oldPath.equals(newPath)) {
+                                    /* Checkpoint WAL and close DB helper so all changes are flushed into the main DB file */
+                                    try {
+                                        if (d.helper != null) {
+                                            wdb = d.getWritableDb();
+                                            c = wdb.rawQuery("PRAGMA wal_checkpoint(FULL)", null);
+                                            u.closeQuietly(c);
+                                            d.helper.close();
+                                        }
+                                    } catch (Exception closeEx) {}
+                                    
                                     oldFile = new java.io.File(oldPath);
                                     if (oldFile.exists()) {
                                         in = new java.io.FileInputStream(oldFile);
-                                        out = new java.io.FileOutputStream(newPath);
-                                        buf = new byte[1024];
-                                        len = 0;
-                                        while ((len = in.read(buf)) > 0) {
-                                            out.write(buf, 0, len);
+                                        try {
+                                            out = new java.io.FileOutputStream(newPath);
+                                            try {
+                                                buf = new byte[8192];
+                                                len = 0;
+                                                while ((len = in.read(buf)) > 0) {
+                                                    out.write(buf, 0, len);
+                                                }
+                                            } finally {
+                                                out.close();
+                                            }
+                                        } finally {
+                                            in.close();
                                         }
-                                        in.close();
-                                        out.close();
                                         oldFile.delete();
+                                        new java.io.File(oldPath + "-wal").delete();
+                                        new java.io.File(oldPath + "-shm").delete();
                                     }
                                 }
                                 

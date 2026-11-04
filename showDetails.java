@@ -16,16 +16,16 @@ import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
 u = util();
-d = data();
-uiObj = ui();
-vd = viewDetail(uiObj);
-
-par1 = tasker.getVariable("par1");
+par1 = u.sanitizeNumber(tasker.getVariable("par1"));
 if (!u.isValidString(par1) || !Patterns.PHONE.matcher(par1).matches()) {
     u.logToFile("showDetails: invalid number in par1: " + par1);
     tasker.showToast("Truecaller - Invalid number");
     return;
 }
+
+d = data();
+uiObj = ui();
+vd = viewDetail(uiObj);
 
 detailNumber = par1;
 u.logDebug("showDetails: opening detail view for " + detailNumber);

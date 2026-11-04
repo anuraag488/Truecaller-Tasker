@@ -88,3 +88,4 @@ for (int i = 0; i < keys.length; i++) {
 }
 
 u.logDebug("updateCallLogNames: updated " + updatedRowsCount + " call log entries.");
+d.close();

@@ -29,10 +29,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 viewDetail(ui) {
-    u = util();
-    d = data();
+    u = ui.u;
+    d = ui.d;
     isStandalone = false;
     isCallLog = false;
+    hasModifiedData = false;
     onDeleted = null;
     onClose = null;
     
@@ -83,8 +84,6 @@ viewDetail(ui) {
         } catch(Exception e) {
             u.logToFile("deleteFromDatabase failed for " + number + ": " + e.getMessage());
             tasker.showToast("Delete failed: " + e.getMessage());
-        } finally {
-            u.closeQuietly(db);
         }
     }
     
@@ -204,6 +203,7 @@ viewDetail(ui) {
                             tasker.showToast("Name updated");
                         }
                     }
+                    hasModifiedData = true;
                     u.logDebug("showInputDialog: saved " + (isNote ? "note" : "name") + " for " + number);
                     refreshDetailView(activity, number);
                     dialog.dismiss();
@@ -212,7 +212,6 @@ viewDetail(ui) {
                     tasker.showToast("Failed to update: " + e.getMessage());
                 } finally {
                     u.closeQuietly(cursor);
-                    u.closeQuietly(db);
                 }
             }
         });
@@ -582,13 +581,19 @@ viewDetail(ui) {
                             u.logToFile("Error deleting filter: " + e.getMessage());
                             tasker.showToast("Failed to unblock: " + e.getMessage());
                             return;
-                        } finally {
-                            u.closeQuietly(db);
                         }
                     }
                     recheckBlockReason = d.getBlockReason(number, csName, details);
                     if (recheckBlockReason != null) {
-                        ui.showUserFiltersDialog(activity, "unblock", number, name, details);
+                        dlg = ui.showUserFiltersDialog(activity, "unblock", number, name, details);
+                        if (dlg != null) {
+                            dlg.setOnDismissListener(new android.content.DialogInterface.OnDismissListener() {
+                                onDismiss(android.content.DialogInterface dAlert) {
+                                    hasModifiedData = true;
+                                    refreshDetailView(activity, number);
+                                }
+                            });
+                        }
                     } else {
                         tasker.showToast("Number unblocked");
                         closeDetailsView(activity, true);
@@ -603,7 +608,15 @@ viewDetail(ui) {
             blockButton.setLayoutParams(blockButtonParams);
             blockButton.setOnClickListener(new View.OnClickListener() {
                 onClick(v) {
-                    ui.showUserFiltersDialog(activity, "block", number, name, details);
+                    dlg = ui.showUserFiltersDialog(activity, "block", number, name, details);
+                    if (dlg != null) {
+                        dlg.setOnDismissListener(new android.content.DialogInterface.OnDismissListener() {
+                            onDismiss(android.content.DialogInterface dAlert) {
+                                hasModifiedData = true;
+                                refreshDetailView(activity, number);
+                            }
+                        });
+                    }
                 }
             });
             buttonLayout.addView(blockButton);
@@ -715,7 +728,7 @@ viewDetail(ui) {
         detailRoot.setOnKeyListener(new View.OnKeyListener() {
             onKey(v, keyCode, event) {
                 if (keyCode == android.view.KeyEvent.KEYCODE_BACK && event.getAction() == android.view.KeyEvent.ACTION_UP) {
-                    closeDetailsView(activity, false);
+                    closeDetailsView(activity, hasModifiedData);
                     return true;
                 }
                 return false;
@@ -723,7 +736,7 @@ viewDetail(ui) {
         });
         detailRoot.setOnClickListener(new View.OnClickListener() {
             onClick(v) {
-                closeDetailsView(activity, false);
+                closeDetailsView(activity, hasModifiedData);
             }
         });
         detailCard.setOnClickListener(new View.OnClickListener() {

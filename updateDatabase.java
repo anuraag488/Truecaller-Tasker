@@ -16,7 +16,6 @@ import java.util.concurrent.TimeUnit;
 import com.joaomgcd.taskerm.action.java.JavaCodeException;
 
 u = util();
-d = data();
 
 installId = tasker.getVariable("TC_installation_id");
 if (!u.isValidString(installId) || installId.equals("%TC_installation_id")) {
@@ -25,14 +24,12 @@ if (!u.isValidString(installId) || installId.equals("%TC_installation_id")) {
     return;
 }
 
+d = data();
+
 userAgent = tasker.getVariable("TC_user_agent");
 if (!u.isValidString(userAgent)) userAgent = "Truecaller/11.75.5 (Android;10)";
 
-/* 
- * If the task is triggered automatically by a time profile, %caller1 starts with "profile=".
- * If you run it manually from the UI or via a button, it will be "ui" or "task=".
- * We force the update if it's a manual run.
- */
+/* Force update if triggered manually rather than by a time profile. */
 caller1 = tasker.getVariable("caller1");
 forceUpdate = false;
 if (caller1 == null || !caller1.startsWith("profile=")) {
@@ -44,7 +41,7 @@ u.logDebug("updateDatabase: start forceUpdate=" + forceUpdate + " caller1=" + ca
 currentTime = System.currentTimeMillis() / 1000;
 sevenDays = 7 * 86400;
 
-/* Load the JSON variable tracking last updates */
+/* Load the JSON variable tracking last updates. */
 lastUpdateJsonStr = tasker.getVariable("TC_last_update_check");
 lastUpdateObj = null;
 try {
@@ -54,7 +51,6 @@ try {
         lastUpdateObj = new JSONObject();
     }
 } catch (Exception e) {
-    // Failsafe if the JSON string gets corrupted
     u.logToFile("updateDatabase: TC_last_update_check is corrupted, resetting: " + e.getMessage());
     lastUpdateObj = new JSONObject();
 }
@@ -63,10 +59,8 @@ jsonModified = false;
 
 boolean shouldUpdate(String key) {
     if (forceUpdate) return true;
-    
     long lastCheck = lastUpdateObj.optLong(key, 0L);
-    if (lastCheck == 0L) return true; // Never updated
-    
+    if (lastCheck == 0L) return true;
     result = (currentTime - lastCheck) > sevenDays;
     u.logDebug("updateDatabase: shouldUpdate(" + key + ") = " + result);
     return result;
@@ -83,13 +77,15 @@ try {
 } catch (Exception e) {
     u.logToFile("updateDatabase: could not open database: " + e.getMessage());
     tasker.showToast("Could not open database: " + e.getMessage());
+    d.close();
     return;
 }
 
 try {
-    /* --- 1. SPAM CATEGORIES --- */
+    /* 1. SPAM CATEGORIES */
     if (shouldUpdate("spam_categories")) {
         u.logDebug("Updating Spam Categories...");
+        response = null;
         try {
             request = new Request.Builder()
                 .url("https://filter-store4-noneu.truecaller.com/v1/spamCategories?encoding=json")
@@ -118,7 +114,6 @@ try {
                     }
                     db.setTransactionSuccessful();
                     
-                    // Update JSON Object
                     lastUpdateObj.put("spam_categories", currentTime);
                     jsonModified = true;
                     u.logDebug("Spam Categories updated successfully (" + arr.length() + " items).");
@@ -127,16 +122,19 @@ try {
                 }
             } else {
                 u.logToFile("Failed to fetch Spam Categories: HTTP " + response.code());
+                d.handleUnauthorized(response.code(), 0);
             }
-            response.close();
         } catch (Exception e) {
             u.logToFile("Error updating Spam Categories: " + e.getMessage());
+        } finally {
+            u.closeQuietly(response);
         }
     }
 
-    /* --- 2. TAGS --- */
+    /* 2. TAGS */
     if (shouldUpdate("tags")) {
         u.logDebug("Updating Tags...");
+        response = null;
         try {
             request = new Request.Builder()
                 .url("https://tagging5-noneu.truecaller.com/v1/tags?encoding=json")
@@ -166,7 +164,6 @@ try {
                     }
                     db.setTransactionSuccessful();
                     
-                    // Update JSON Object
                     lastUpdateObj.put("tags", currentTime);
                     jsonModified = true;
                     u.logDebug("Tags updated successfully (" + arr.length() + " items).");
@@ -175,13 +172,15 @@ try {
                 }
             } else {
                 u.logToFile("Failed to fetch Tags: HTTP " + response.code());
+                d.handleUnauthorized(response.code(), 0);
             }
-            response.close();
         } catch (Exception e) {
             u.logToFile("Error updating Tags: " + e.getMessage());
+        } finally {
+            u.closeQuietly(response);
         }
     }
-
+  
     /* --- 3. TOP SPAMMERS --- */
     /*if (shouldUpdate("topspammers")) {
         u.logDebug("Updating Top Spammers...");
@@ -227,13 +226,15 @@ try {
             u.logToFile("Error updating Top Spammers: " + e.getMessage());
         }
     }*/
+  
 } finally {
-    if (db != null) {
-        db.close();
-    }
+    d.close();
+    try {
+        httpClient.dispatcher().executorService().shutdown();
+        httpClient.connectionPool().evictAll();
+    } catch (Exception e) {}
 }
 
-/* Save the updated JSON back to Tasker if there were any successful updates */
 if (jsonModified) {
     tasker.setVariable("TC_last_update_check", lastUpdateObj.toString());
     u.logDebug("updateDatabase: saved TC_last_update_check");

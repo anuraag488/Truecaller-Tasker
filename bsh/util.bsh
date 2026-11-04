@@ -45,8 +45,16 @@ util() {
         }
     }
     
+    cachedCountryIso = null;
+
     getCountryIso() {
+        if (cachedCountryIso != null) return cachedCountryIso;
         try {
+            tcIso = tasker.getVariable("TC_country_code_iso");
+            if (isValidString(tcIso) && !tcIso.startsWith("%")) {
+                cachedCountryIso = tcIso.trim().toUpperCase();
+                return cachedCountryIso;
+            }
             tm = context.getSystemService(context.TELEPHONY_SERVICE);
             if (tm != null) {
                 countryIso = tm.getSimCountryIso();
@@ -54,17 +62,29 @@ util() {
                     countryIso = tm.getNetworkCountryIso();
                 }
                 if (countryIso != null && !countryIso.isEmpty()) {
-                    return countryIso.toUpperCase();
+                    cachedCountryIso = countryIso.toUpperCase();
+                    return cachedCountryIso;
                 }
             }
         } catch (Exception e) {
             logToFile("error while trying to get countryIso: " + e.getMessage());
         }
-        return "IN";
+        cachedCountryIso = "IN";
+        return cachedCountryIso;
+    }
+
+    sanitizeNumber(number) {
+        if (number == null || number == void) return null;
+        cleaned = number.replaceAll("[\\u200B-\\u200D\\uFEFF\\u202A-\\u202E]", "").trim();
+        if (cleaned.toLowerCase().startsWith("tel:")) {
+            cleaned = cleaned.substring(4).trim();
+        }
+        return cleaned;
     }
 
     convertToE164(number) {
         try {
+            number = sanitizeNumber(number);
             countryIso = getCountryIso();
             e164 = PhoneNumberUtils.formatNumberToE164(number, countryIso);
             return e164 != null ? e164 : number;
