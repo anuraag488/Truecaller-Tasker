@@ -72,6 +72,7 @@ existingTask = uiObj.handleExistingTask(taskDescription, false);
 if (existingTask != null) {
     u.logDebug("truecaller: list view already open, moving to front");
     existingTask.moveToFront();
+    uiObj.cleanup();
     return;
 }
 u.logDebug("truecaller: opening list view");
@@ -96,7 +97,7 @@ dialpadView = null;
 fab = null;
 numberDisplay = null;
 mainAdapter = null;
-executorService = Executors.newCachedThreadPool();
+executorService = uiObj.executorService;
 
 String getT9Regex(String query) {
   sb = new StringBuffer();
@@ -144,7 +145,7 @@ performLiveSearch(query) {
     uiObj.mainHandler.removeCallbacksAndMessages(null);
     cancelPendingLoads();
     
-    final long thisSearchId = currentSearchId.incrementAndGet(); // atomic increment + capture
+    final long thisSearchId = currentSearchId.incrementAndGet();
 
     if (!u.isValidString(query)) {
         isSearching = false;
@@ -157,7 +158,7 @@ performLiveSearch(query) {
         run() {
             try {
             callLogResults = loadCallLogData(finalQuery);
-            if (thisSearchId != currentSearchId.get()) return;   // atomic read
+            if (thisSearchId != currentSearchId.get()) return;
             truecallerResults = loadTruecallerLogData(finalQuery);
             if (thisSearchId != currentSearchId.get()) return;
             contactsResults = searchContacts(finalQuery);
@@ -165,10 +166,10 @@ performLiveSearch(query) {
             
             allResults = new ArrayList();
 
-            // IDEA 3: Inject Truecaller Search row if query is a >3 digit number
+            /* Inject Truecaller Search row if query is a >= 3 digit number */
             if (finalQuery.matches("[0-9+*#]+") && finalQuery.length() >= 3) {
                 Object[] tcDetails = d.loadNumberDetails(finalQuery);
-                // Only show the button if data doesn't exist or is older than 30 days
+                /* Only show the button if data doesn't exist or is older than 30 days */
                 if (tcDetails == null || d.needsUpdate(tcDetails)) {
                     Object[] searchEntry = new Object[9];
                     searchEntry[0] = "Search Truecaller";
@@ -178,7 +179,7 @@ performLiveSearch(query) {
                     searchEntry[4] = ""; 
                     searchEntry[5] = false; 
                     searchEntry[6] = 0; 
-                    searchEntry[7] = -2; // -2 acts as a special ID for the Search row
+                    searchEntry[7] = -2; /* -2 acts as a special ID for the Search row */
                     searchEntry[8] = null;
                     allResults.add(searchEntry);
                 }
@@ -272,7 +273,6 @@ loadAllContactPhotos(forceRefresh) {
 
 cleanup() {
     u.logDebug("truecaller: cleaning up resources...");
-    executorService.shutdownNow();
     uiObj.cleanup();
 }
 
@@ -283,7 +283,7 @@ loadCallLogData(searchQuery) {
     cursor = null;
     
     groupingSettings = tasker.getVariable("TC_call_log_grouping");
-    if (groupingSettings == null) groupingSettings = "Phone"; // Default to no grouping (show all)
+    if (groupingSettings == null) groupingSettings = "Phone";
     groupByDate = groupingSettings.contains("Date");
     groupByContact = groupingSettings.contains("Contact");
     groupByPhone = groupingSettings.contains("Phone");
@@ -429,11 +429,7 @@ loadCallLogData(searchQuery) {
                 else if (spamScore > 0) formattedName += " 🔴";
             }
 
-            // Create Lego-style grouping key
             groupKey = "";
-            
-            // If neither Contact nor Phone is selected, we DO NOT collapse calls.
-            // Every call remains an individual entry.
             if (!groupByContact && !groupByPhone) {
                 groupKey = java.util.UUID.randomUUID().toString(); 
             } else {
@@ -442,13 +438,11 @@ loadCallLogData(searchQuery) {
                 if (groupByPhone) groupKey += e164 + "|";
             }
 
-            // Add ID to the group list and stop if we've already rendered this group
             if (seenGroupKeys.containsKey(groupKey)) {
                 ((ArrayList) groupCallIds.get(groupKey)).add(id);
                 continue;
             }
             
-            // First time seeing this group, create the ID list
             ids = new ArrayList();
             ids.add(id);
             groupCallIds.put(groupKey, ids);
@@ -481,12 +475,12 @@ loadCallLogData(searchQuery) {
                 if (showHeaders && !dateSection.equals(lastDateSection)) {
                     headerEntry = new Object[9];
                     headerEntry[0] = dateSection;
-                    headerEntry[7] = -1; // -1 denotes a header row
+                    headerEntry[7] = -1;
                     list.add(headerEntry);
                     lastDateSection = dateSection;
                 }
 
-                entry = new Object[9]; // Increased array size to 9
+                entry = new Object[9];
                 entry[0] = formattedName;
                 entry[1] = e164;
                 entry[2] = image;
@@ -495,7 +489,7 @@ loadCallLogData(searchQuery) {
                 entry[5] = isVerified;
                 entry[6] = spamScore;
                 entry[7] = callType;
-                entry[8] = groupCallIds.get(groupKey); // Store the ArrayList of IDs!
+                entry[8] = groupCallIds.get(groupKey);
                 list.add(entry);
             }
         }
@@ -503,7 +497,6 @@ loadCallLogData(searchQuery) {
         u.logToFile("Error loading call log: " + e.getMessage());
     } finally {
         u.closeQuietly(cursor);
-        u.closeQuietly(db);
     }
     u.logDebug("loadCallLogData: query='" + searchQuery + "' grouping=" + groupingSettings + " -> " + list.size() + " rows in " + (System.currentTimeMillis() - loadStart) + "ms");
     return list;
@@ -532,7 +525,6 @@ loadTruecallerLogData(searchQuery) {
             argList = new ArrayList();
             argList.add(e164Arg);
             sb.append("WHERE (number_e164 LIKE ? OR (");
-            /* Every word must match the name or note, in any order. */
             tokens = searchQuery.trim().split("\\s+");
             for (i = 0; i < tokens.length; i++) {
                 if (i > 0) sb.append(" AND ");
@@ -577,7 +569,6 @@ loadTruecallerLogData(searchQuery) {
         u.logToFile("Error loading truecaller log: " + e.getMessage());
     } finally {
         u.closeQuietly(cursor);
-        u.closeQuietly(db);
     }
     u.logDebug("loadTruecallerLogData: query='" + searchQuery + "' -> " + list.size() + " rows");
     return list;
@@ -681,10 +672,13 @@ showClearConfirmation(activity, title, message, taskParam) {
         run() {
             db = null;
             try {
-                db = d.getWritableDb();
                 if ("clear_call_log".equals(taskParam)) {
-                    tasker.showToast("Feature not added");
+                    callLogUri = android.net.Uri.parse("content://call_log/calls");
+                    deleted = context.getContentResolver().delete(callLogUri, null, null);
+                    u.logDebug("Cleared system call log, rows deleted=" + deleted);
+                    tasker.showToast("Call log cleared");
                 } else if ("clear_truecaller_log".equals(taskParam)) {
+                    db = d.getWritableDb();
                     u.logDebug("Clearing Truecaller log table");
                     db.execSQL("DELETE FROM data");
                     tasker.showToast("Truecaller log cleared");
@@ -697,8 +691,6 @@ showClearConfirmation(activity, title, message, taskParam) {
             } catch(Exception e) {
                 u.logToFile("Failed to clear log: " + e.getMessage());
                 tasker.showToast("Failed to clear: " + e.getMessage());
-            } finally {
-                u.closeQuietly(db);
             }
         }
     };
@@ -746,7 +738,7 @@ showStyledMenuDialog(activity) {
                     if (menuIndex == 0) {
                         options = new String[]{"Contact", "Date", "Phone"};
                         currentOption = tasker.getVariable("TC_call_log_grouping");
-                        if (currentOption == null) currentOption = "Phone"; // Default to empty
+                        if (currentOption == null) currentOption = "Phone";
 
                         groupDialog = new android.app.Dialog(activity);
                         groupDialog.requestWindowFeature(1);
@@ -847,7 +839,6 @@ showStyledMenuDialog(activity) {
                                 
                                 uiObj.mainHandler.post(new Runnable() {
                                     run() {
-                                        // Update dialog background to new theme
                                         if (mainDialog != null) {
                                             mainDialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(uiObj.getColorInt("surface-variant")));
                                         }
@@ -947,7 +938,7 @@ showContextMenu(activity, entry) {
                                         if (idsList != null && !idsList.isEmpty()) {
                                             vd.deleteSpecificCallLogs(idsList);
                                         } else {
-                                            vd.deleteFromCallLog(number); // Fallback
+                                            vd.deleteFromCallLog(number);
                                         }
                                     } else {
                                         vd.deleteFromDatabase(number);
@@ -1059,7 +1050,7 @@ createDialpadView(activity) {
                 }
             });
             
-      		final String finalKey = btnKey;
+            final String finalKey = btnKey;
             btn.setOnClickListener(new View.OnClickListener() {
                 onClick(v) {
                     start = numberDisplay.getSelectionStart();
@@ -1224,34 +1215,40 @@ refreshListView() {
     }
 }
 
+void removeEntryFromList(ArrayList listToClean, Object[] targetEntry) {
+    index = listToClean.indexOf(targetEntry);
+    if (index == -1) return;
+    listToClean.remove(index);
+
+    boolean prevIsHeader = false;
+    int headerIndex = -1;
+    if (index > 0) {
+        prevItem = listToClean.get(index - 1);
+        if (((Integer) prevItem[7]).intValue() == -1) {
+            prevIsHeader = true;
+            headerIndex = index - 1;
+        }
+    }
+
+    if (prevIsHeader) {
+        boolean nextIsHeaderOrEnd = (index >= listToClean.size()) ||
+            (((Integer) listToClean.get(index)[7]).intValue() == -1);
+        if (nextIsHeaderOrEnd) {
+            listToClean.remove(headerIndex);
+        }
+    }
+}
+
 void removeCardFromUi(Object[] targetEntry) {
     uiObj.mainHandler.post(new Runnable() {
         run() {
-            if (isSearching) dataList = searchResults;
-            else if (currentTab.equals("calllog")) dataList = callLogData;
-            else dataList = truecallerLogData;
-
-            index = dataList.indexOf(targetEntry);
-            if (index != -1) {
-                dataList.remove(index);
-            
-                boolean prevIsHeader = false;
-                int headerIndex = -1;
-                if (index > 0) {
-                    prevItem = dataList.get(index - 1);
-                    if (((Integer) prevItem[7]).intValue() == -1) {
-                        prevIsHeader = true;
-                        headerIndex = index - 1;
-                    }
-                }
-            
-                if (prevIsHeader) {
-                    boolean nextIsHeaderOrEnd = (index >= dataList.size()) ||
-                        (((Integer) dataList.get(index)[7]).intValue() == -1);
-                    if (nextIsHeaderOrEnd) {
-                        dataList.remove(headerIndex);
-                    }
-                }
+            if (isSearching) {
+                removeEntryFromList(searchResults, targetEntry);
+            }
+            if (currentTab.equals("calllog")) {
+                removeEntryFromList(callLogData, targetEntry);
+            } else {
+                removeEntryFromList(truecallerLogData, targetEntry);
             }
             if (mainAdapter != null) mainAdapter.notifyDataSetChanged();
         }
@@ -1343,7 +1340,7 @@ Object createListAdapter(Activity activity) {
                 int pos = ((Integer)args[0]).intValue();
                 Object[] entry = dataList.get(pos);
                 int callType = ((Integer) entry[7]).intValue();
-                return callType != -1; // Return false (disabled) if it's a header
+                return callType != -1;
             }
 
             if (methodName.equals("getView")) {
@@ -1370,7 +1367,6 @@ Object createListAdapter(Activity activity) {
 }
 
 createListRowView(parent) {
-    // This vertical wrapper holds both the header (top) and the card (bottom)
     rowWrapper = new LinearLayout(parent.getContext());
     rowWrapper.setOrientation(LinearLayout.VERTICAL);
 
@@ -1448,7 +1444,7 @@ createListRowView(parent) {
 
     card.addView(infoLayout);
     
-    holder = new Object[8]; // Expanded to hold 8 items
+    holder = new Object[8];
     holder[0] = avatarView;
     holder[1] = nameText;
     holder[2] = numberText;
@@ -1469,12 +1465,11 @@ bindListRowView(rowView, entry, activity) {
     headerText = holder[7];
     cardView = holder[6];
 
-    // Check if this is a header row (-1 means date header)
     if (callType == -1) {
         headerText.setText((String) entry[0]);
         headerText.setVisibility(View.VISIBLE);
         cardView.setVisibility(View.GONE);
-        return; // Skip processing the rest since it's just a date header
+        return;
     } else {
         headerText.setVisibility(View.GONE);
         cardView.setVisibility(View.VISIBLE);
@@ -1487,10 +1482,9 @@ bindListRowView(rowView, entry, activity) {
     noteText = holder[4];
     spamText = holder[5];
 
-    // Check if this is our special Truecaller Search row (-2)
     if (callType == -2) {
         nameText.setText((String) entry[0]);
-        nameText.setTextColor(uiObj.getColorInt("primary")); // Color it primary to look like an action
+        nameText.setTextColor(uiObj.getColorInt("primary"));
         numberText.setText((String) entry[1]);
         timeText.setText("");
         timeText.setCompoundDrawables(null, null, null, null);
@@ -1507,16 +1501,13 @@ bindListRowView(rowView, entry, activity) {
         
         cardView.setOnClickListener(new View.OnClickListener() {
             onClick(v) {
-                // Prevent duplicate clicks if already fetching
                 if ("Fetching...".equals(currentEntry[3])) return;
 
-                // Collapse dialpad smoothly
                 if (dialpadView != null && dialpadView.getVisibility() == View.VISIBLE) {
                     dialpadView.setVisibility(View.GONE);
                     if (fab != null) fab.setVisibility(View.VISIBLE);
                 }
                 
-                // Show inline loading state
                 currentEntry[3] = "Fetching...";
                 if (mainAdapter != null) mainAdapter.notifyDataSetChanged();
 
@@ -1529,7 +1520,6 @@ bindListRowView(rowView, entry, activity) {
                             uiObj.mainHandler.post(new Runnable() {
                                 run() {
                                     if (fetchedDetails != null) {
-                                        // Update the entry in-place to morph into a normal Truecaller Log item
                                         String tcName = (String) fetchedDetails[0];
                                         int spamScore = ((Integer) fetchedDetails[2]).intValue();
                                         boolean isVerified = ((Boolean) fetchedDetails[3]).booleanValue();
@@ -1544,19 +1534,33 @@ bindListRowView(rowView, entry, activity) {
                                         currentEntry[1] = searchNumber;
                                         currentEntry[2] = image;
                                         currentEntry[3] = note;
-                                        // Set timestamp to right now
                                         currentEntry[4] = new java.text.SimpleDateFormat("dd-MM-yyyy HH:mm:ss").format(new java.util.Date());
                                         currentEntry[5] = isVerified;
                                         currentEntry[6] = spamScore;
-                                        currentEntry[7] = 0; // Morph into standard Truecaller log row!
+                                        currentEntry[7] = 0;
                                         
-                                        // Mirror number to search box without causing a full list reload
                                         if (searchBox != null) {
                                             searchBox.setText(searchNumber);
                                             searchBox.clearFocus();
                                         }
 
                                         if (mainAdapter != null) mainAdapter.notifyDataSetChanged();
+
+                                        /* Refresh the underlying tab lists in the background so pressing Back shows the new entry */
+                                        executorService.submit(new Runnable() {
+                                            run() {
+                                                try {
+                                                    freshCalls = loadCallLogData(null);
+                                                    freshTc = loadTruecallerLogData(null);
+                                                    uiObj.mainHandler.post(new Runnable() {
+                                                        run() {
+                                                            callLogData = freshCalls;
+                                                            truecallerLogData = freshTc;
+                                                        }
+                                                    });
+                                                } catch (Exception bgEx) {}
+                                            }
+                                        });
                                     } else {
                                         currentEntry[3] = "Failed to fetch. Tap to retry.";
                                         if (mainAdapter != null) mainAdapter.notifyDataSetChanged();
@@ -1576,7 +1580,6 @@ bindListRowView(rowView, entry, activity) {
             }
         });
         
-        // Remove context menu for the search row
         cardView.setOnLongClickListener(new View.OnLongClickListener() {
             onLongClick(v) { return true; }
             onLongClickUseDefaultHapticFeedback(v) { return false; }
@@ -1584,7 +1587,7 @@ bindListRowView(rowView, entry, activity) {
         return;
     }
 
-    nameText.setTextColor(uiObj.getColorInt("on-surface")); // Ensure regular rows are standard color
+    nameText.setTextColor(uiObj.getColorInt("on-surface"));
 
     name = entry[0];
     number = entry[1];
@@ -1740,7 +1743,7 @@ createListView(activity) {
             if (searchBox != null) searchBox.clearFocus();
             if (mainWrapper != null) mainWrapper.requestFocus();
             
-            searchQuery = searchBox.getText().toString().trim();
+            searchQuery = u.sanitizeNumber(searchBox.getText().toString());
             if (searchQuery.isEmpty()) {
                 tasker.showToast("Please enter a search query");
                 return;
@@ -1753,7 +1756,7 @@ createListView(activity) {
                 if (d.needsUpdate(details)) {
                     tasker.showToast("Fetching fresh data...");
                     u.logDebug("Search: stale or missing data for " + searchQuery + ", fetching from Truecaller");
-          			    final String finalSearchQuery = searchQuery;
+                    final String finalSearchQuery = searchQuery;
                     executorService.submit(new Runnable() {
                         run() {
                             try {
@@ -1776,7 +1779,7 @@ createListView(activity) {
             performSearch(searchQuery);
         }
         performSearch(query) {
-      	final String finalQuery = query;
+            final String finalQuery = query;
             executorService.submit(new Runnable() {
                 run() {
                     try {
@@ -1789,7 +1792,7 @@ createListView(activity) {
                     allResults.addAll(truecallerResults);
                     allResults.addAll(contactsResults);
                     
-          			    final ArrayList finalResults = allResults;
+                    final ArrayList finalResults = allResults;
                     uiObj.mainHandler.post(new Runnable() {
                         run() {
                             searchResults = finalResults;
@@ -1998,22 +2001,16 @@ createListView(activity) {
         mainDialog.setOnKeyListener(new android.content.DialogInterface.OnKeyListener() {
             onKey(dialogInterface, keyCode, event) {
                 if (keyCode == android.view.KeyEvent.KEYCODE_BACK && event.getAction() == android.view.KeyEvent.ACTION_UP) {
-                    
-                    // 1. Check if the detail view is currently open
                     if (vd != null && vd.detailOverlay != null && vd.detailOverlay.getParent() != null) {
-                        vd.closeDetailsView(activity, false);
+                        vd.closeDetailsView(activity, vd.hasModifiedData);
                         return true;
-                    } 
-                    // 2. Check if the dialpad is open
-                    else if (dialpadView != null && dialpadView.getVisibility() == View.VISIBLE) {
+                    } else if (dialpadView != null && dialpadView.getVisibility() == View.VISIBLE) {
                         dialpadView.setVisibility(View.GONE);
                         if (numberDisplay != null) numberDisplay.clearFocus();
                         if (fab != null) fab.setVisibility(View.VISIBLE);
                         if (mainWrapper != null) mainWrapper.requestFocus();
                         return true;
-                    } 
-                    // 3. Check if search is active
-                    else if (isSearching || (searchBox != null && !searchBox.getText().toString().trim().isEmpty()) || (numberDisplay != null && !numberDisplay.getText().toString().isEmpty())) {
+                    } else if (isSearching || (searchBox != null && !searchBox.getText().toString().trim().isEmpty()) || (numberDisplay != null && !numberDisplay.getText().toString().isEmpty())) {
                         if (searchBox != null) {
                             searchBox.setText("");
                             searchBox.clearFocus();
@@ -2023,7 +2020,7 @@ createListView(activity) {
                         if (mainWrapper != null) mainWrapper.requestFocus();
                         return true;
                     }
-                    return false; // Let the dialog dismiss itself
+                    return false;
                 }
                 return false;
             }
@@ -2038,19 +2035,15 @@ activityConsumer = new Consumer() {
     accept(activityObj) {
         activity = activityObj;
         try {
-        
-        // 1. Initialize the Dialog FIRST so we can apply flags to it
         mainDialog = new android.app.Dialog(activity, android.R.style.Theme_DeviceDefault_NoActionBar);
         mainDialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(uiObj.getColorInt("surface-variant")));
         mainDialog.getWindow().setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
         
-        // --- LOCKSCREEN LOGIC START ---
         km = activity.getSystemService(Context.KEYGUARD_SERVICE);
         isLocked = km != null && km.isKeyguardLocked();
         u.logDebug("truecaller: keyguard locked=" + isLocked);
 
         if (isLocked) {
-            // A. Apply lockscreen flags to the Activity
             if (android.os.Build.VERSION.SDK_INT >= 27) {
                 activity.setShowWhenLocked(true);
                 activity.setTurnScreenOn(true);
@@ -2058,20 +2051,17 @@ activityConsumer = new Consumer() {
                 activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
             }
             
-            // B. Apply lockscreen flags to the Dialog Window (CRITICAL FIX)
             mainDialog.getWindow().addFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED |
                 WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON |
                 WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
             );
 
-            // C. Create receiver to drop privileges if user locks the screen again
             receiverImpl = new ClassImplementation() {
                 run(Callable superCaller, String methodName, Object[] args) {
                     if ("onReceive".equals(methodName)) {
                         intent = args[1];
                         if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
-                            // Drop lockscreen privileges from both Activity and Dialog
                             if (android.os.Build.VERSION.SDK_INT >= 27) {
                                 activity.setShowWhenLocked(false);
                             }
@@ -2084,12 +2074,10 @@ activityConsumer = new Consumer() {
                 }
             };
             
-            // Register receiver and save it to the view's tag for cleanup
             screenOffReceiver = tasker.implementClass(BroadcastReceiver.class, receiverImpl);
             activity.registerReceiver(screenOffReceiver, new IntentFilter(Intent.ACTION_SCREEN_OFF));
             activity.getWindow().getDecorView().setTag(screenOffReceiver);
         }
-        // --- LOCKSCREEN LOGIC END ---
 
         rootContainer = new FrameLayout(activity);
         
@@ -2118,7 +2106,6 @@ activityConsumer = new Consumer() {
             onDismiss(android.content.DialogInterface dAlert) {
                 u.logDebug("closing truecaller list view");
                 
-                // Unregister the screen off receiver if it exists
                 rec = activity.getWindow().getDecorView().getTag();
                 if (rec != null) {
                     try { activity.unregisterReceiver(rec); } catch (Exception e) { u.logToFile("Error unregistering screen-off receiver: " + e.getMessage()); }

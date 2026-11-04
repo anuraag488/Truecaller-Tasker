@@ -47,19 +47,21 @@ if (tcRemovalRunnable != null && tcRemovalRunnable != void) {
 }
 
 number = null;
-par1 = tasker.getVariable("par1");
+par1 = u.sanitizeNumber(tasker.getVariable("par1"));
 if (u.isValidString(par1) && Patterns.PHONE.matcher(par1).matches()) {
   number = par1;
 }
 
 if (number == null) {
   u.logToFile("showOverlay: par1 is required, got: " + par1);
+  uiObj.cleanup();
   throw new JavaCodeException("par1 is required");
 }
 
 dbPath = tasker.getVariable("TC_dbpath");
 if (!u.isValidString(dbPath)) {
   u.logToFile("showOverlay: TC_dbpath variable is not set");
+  uiObj.cleanup();
   throw new JavaCodeException("TC_dbpath variable is not set");
 }
 
@@ -508,6 +510,7 @@ uiObj.mainHandler.post(new Runnable() {
       showOverlay();
     } catch (Exception e) {
       u.logToFile("showOverlay: failed to show overlay: " + e.getMessage());
+      removeOverlay();
     }
   }
 });

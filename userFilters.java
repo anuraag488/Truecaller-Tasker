@@ -19,7 +19,7 @@ u = util();
 d = data();
 uiObj = ui();
 
-par1 = tasker.getVariable("par1");
+par1 = u.sanitizeNumber(tasker.getVariable("par1"));
 par2 = tasker.getVariable("par2");
 
 filterNumber = "";

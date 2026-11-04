@@ -2,6 +2,7 @@ import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
+import android.provider.ContactsContract;
 import com.joaomgcd.taskerm.action.java.JavaCodeException;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -15,11 +16,11 @@ import okhttp3.Request;
 import okhttp3.Response;
 
 data() {
-    u = util();
+    if (u == null || u == void) u = util();
     CACHE_EXPIRY_SECONDS = 30 * 86400;
     httpClient = new OkHttpClient();
     
-    // Initialize the DB Helper from dbHelper.bsh
+    /* Initialize the DB Helper from dbHelper.bsh */
     helper = dbHelper();
     
     reloadDb() {
@@ -29,6 +30,20 @@ data() {
             u.logToFile("reloadDb helper close error: " + e.getMessage());
         }
         helper = dbHelper();
+    }
+
+    close() {
+        try {
+            if (helper != null) helper.close();
+        } catch (Exception e) {
+            u.logToFile("data.close helper error: " + e.getMessage());
+        }
+        try {
+            if (httpClient != null) {
+                httpClient.dispatcher().executorService().shutdown();
+                httpClient.connectionPool().evictAll();
+            }
+        } catch (Exception e) {}
     }
 
     getReadableDb() {
@@ -41,7 +56,6 @@ data() {
     
     loadNumberDetails(number) {
         e164Number = u.convertToE164(number);
-        db = null;
         cursor = null;
         try {
             db = getReadableDb();
@@ -75,7 +89,6 @@ data() {
             u.logToFile("Error loading number details for " + e164Number + ": " + e.getMessage());
         } finally {
             u.closeQuietly(cursor);
-            u.closeQuietly(db);
         }
         return null;
     }
@@ -86,6 +99,16 @@ data() {
         currentTime = System.currentTimeMillis() / 1000;
         timestamp = details[6];
         return (currentTime - timestamp) > CACHE_EXPIRY_SECONDS;
+    }
+
+    handleUnauthorized(httpCode, tcStatus) {
+        if (httpCode == 401 || tcStatus == 40101) {
+            u.logToFile("Unauthorized (HTTP " + httpCode + ", status " + tcStatus + "). Clearing installation ID and disabling profiles.");
+            tasker.clearVariable("TC_installation_id");
+            vars = new HashMap();
+            vars.put("par1", "disable");
+            tasker.callTask("Truecaller - Helper", vars);
+        }
     }
     
     fetchFromTruecaller(number) {
@@ -129,6 +152,7 @@ data() {
                     }
                 } else {
                     errorBody = "";
+                    status = 0;
                     try {
                         body = response.body();
                         if (body != null) {
@@ -141,9 +165,11 @@ data() {
                     } catch (Exception parseEx) {
                         u.logToFile("Error parsing HTTP error body: " + parseEx.getMessage());
                     }
+                    handleUnauthorized(response.code(), status);
                     u.logToFile("HTTP request failed: " + response.code() + errorBody);
                     throw new Exception("HTTP " + response.code() + errorBody);
                 }
+                
             } finally {
                 response.close();
             }
@@ -216,6 +242,7 @@ data() {
                     return results;
                 } else {
                     errorBody = "";
+                    status = 0;
                     try {
                         body = response.body();
                         if (body != null) {
@@ -228,6 +255,7 @@ data() {
                     } catch (Exception parseEx) {
                         u.logToFile("Error parsing HTTP error body: " + parseEx.getMessage());
                     }
+                    handleUnauthorized(response.code(), status);
                     u.logToFile("Bulk HTTP request failed: " + response.code() + errorBody);
                     throw new Exception("HTTP " + response.code() + errorBody);
                 }
@@ -241,7 +269,6 @@ data() {
     }
     
     saveToDatabase(number, numberE164, jsonResponse) {
-        db = null;
         cursor = null;
         try {
             json = new JSONObject(jsonResponse);
@@ -344,19 +371,19 @@ data() {
             return null;
         } finally {
             u.closeQuietly(cursor);
-            u.closeQuietly(db);
         }
     }
     
     getPhoneBookName(number) {
+        if (!u.isValidString(number)) return null;
         contactCursor = null;
         try {
-            e164Number = u.convertToE164(number);
-            contactsUri = android.net.Uri.parse("content://com.android.contacts/data/phones");
+            lookupUri = Uri.withAppendedPath(
+                ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+                Uri.encode(number)
+            );
             projection = new String[]{"display_name"};
-            selection = "data4 = ?";
-            selectionArgs = new String[]{e164Number};
-            contactCursor = context.getContentResolver().query(contactsUri, projection, selection, selectionArgs, null);
+            contactCursor = context.getContentResolver().query(lookupUri, projection, null, null, null);
             if (contactCursor != null && contactCursor.moveToFirst()) {
                 return contactCursor.getString(0);
             }
@@ -369,14 +396,15 @@ data() {
     }
 
     getContactPhoto(number) {
+        if (!u.isValidString(number)) return null;
         contactCursor = null;
         try {
-            e164Number = u.convertToE164(number);
-            contactsUri = android.net.Uri.parse("content://com.android.contacts/data/phones");
+            lookupUri = Uri.withAppendedPath(
+                ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+                Uri.encode(number)
+            );
             projection = new String[]{"photo_uri"};
-            selection = "data4 = ?";
-            selectionArgs = new String[]{e164Number};
-            contactCursor = context.getContentResolver().query(contactsUri, projection, selection, selectionArgs, null);
+            contactCursor = context.getContentResolver().query(lookupUri, projection, null, null, null);
             if (contactCursor != null && contactCursor.moveToFirst()) {
                 return contactCursor.getString(0);
             }
@@ -390,7 +418,6 @@ data() {
     
     getBlockReason(number, csName, details) {
         e164Number = u.convertToE164(number);
-        db = null;
         cursor = null;
         reasonToReturn = null;
         
@@ -426,7 +453,7 @@ data() {
                     "AND ((SELECT is_contact FROM vars)=0 OR f.field='number') " +
                     "AND ( " +
                     "(f.value NOT LIKE '%*%' AND i.val = f.value COLLATE NOCASE) " +
-                    "OR (f.value LIKE '%*%' AND i.val LIKE REPLACE(f.value,'*','%') COLLATE NOCASE) " +
+                    "OR (f.value LIKE '%*%' AND i.val LIKE REPLACE(REPLACE(REPLACE(f.value, '\\', '\\\\'), '_', '\\_'), '*', '%') ESCAPE '\\' COLLATE NOCASE) " +
                     ") " +
                     "ORDER BY CASE f.type WHEN 'Allow' THEN 0 ELSE 1 END " +
                     "LIMIT 1 " +
@@ -488,7 +515,7 @@ data() {
                         reasonToReturn = "User Filter (" + reason + ")";
                     } else if ("Allow".equals(decision)) {
                         u.logDebug("getBlockReason: explicit Allow filter for " + e164Number + ", skipping all other checks");
-                        return null; // Explicit allow skips everything else!
+                        return null; /* Explicit allow skips everything else! */
                     }
                 }
             }
@@ -545,7 +572,6 @@ data() {
             u.logToFile("Error checking block reason: " + e.getMessage());
         } finally {
             u.closeQuietly(cursor);
-            u.closeQuietly(db);
         }
         
         u.logDebug("getBlockReason: " + e164Number + " reason before repeat/dialed checks=" + reasonToReturn);
@@ -556,7 +582,7 @@ data() {
     }
 
     checkDialedNumber(reason, number, e164Number) {
-        if (reason == null) return null; // Already allowed
+        if (reason == null) return null; /* Already allowed */
         
         allowDialed = tasker.getVariable("TC_allow_dialed_numbers");
         if (!"true".equals(allowDialed)) return reason;
@@ -572,13 +598,13 @@ data() {
                 if (daysStr != null) {
                     try { days = Integer.parseInt(daysStr.trim()); } catch(Exception e){ u.logToFile("checkDialedNumber parse error: " + e.getMessage()); }
                 }
-                // Calculate milliseconds to subtract from current time
+                /* Calculate milliseconds to subtract from current time */
                 minThreshold = System.currentTimeMillis() - (days * 24L * 60L * 60L * 1000L);
             }
             
             callLogUri = android.net.Uri.parse("content://call_log/calls");
             projection = new String[]{"_id"};
-            // Query for outgoing calls (type 2) matching the number
+            /* Query for outgoing calls (type 2) matching the number */
             selection = "(number = ? OR normalized_number = ?) AND type = 2 AND date >= ?";
             selectionArgs = new String[]{number, e164Number, String.valueOf(minThreshold)};
             
@@ -597,7 +623,7 @@ data() {
     }
     
     checkRepeatCaller(reason, number, e164Number) {
-        if (reason == null) return null; // Not blocked anyway
+        if (reason == null) return null; /* Not blocked anyway */
         
         allowRepeat = tasker.getVariable("TC_allow_repeat_callers");
         if (!"true".equals(allowRepeat)) return reason;
@@ -622,7 +648,7 @@ data() {
             }
 
             now = System.currentTimeMillis();
-            // Max Interval is in minutes. Multiply by 60 * 1000 to get milliseconds
+            /* Max Interval is in minutes. Multiply by 60 * 1000 to get milliseconds */
             maxThreshold = now - (maxInt * 60 * 1000L);
             u.logDebug("checkRepeatCaller: times=" + times + " minInterval=" + minInt + "s maxInterval=" + maxInt + "m");
             
@@ -649,7 +675,7 @@ data() {
                     }
                     
                     diff = lastConsideredCallTime - cTime;
-                    // Min gap is in seconds. Multiply by 1000 to get milliseconds
+                    /* Min gap is in seconds. Multiply by 1000 to get milliseconds */
                     if (diff >= (minInt * 1000L)) {
                         validPriorCalls++;
                         lastConsideredCallTime = cTime;
@@ -657,7 +683,7 @@ data() {
                     
                     if (validPriorCalls >= (times - 1)) {
                         u.logDebug("checkRepeatCaller: repeat caller allowed (prior valid calls: " + validPriorCalls + ")");
-                        return null; // Allowed due to repeat caller constraints!
+                        return null; /* Allowed due to repeat caller constraints! */
                     }
                 }
             }
@@ -690,43 +716,37 @@ data() {
     }
 
     getTagDetails(tagId) {
-      db = null;
-      cursor = null;
-      try {
-        db = getReadableDb();
-        cursor = db.rawQuery("SELECT c.name,CASE WHEN c.iconUrl IS NOT NULL AND c.iconUrl <> 'null' THEN c.iconUrl ELSE p.iconUrl END AS finalIconUrl FROM tags c LEFT JOIN tags p ON c.parentId = p.id WHERE c.id = ?", new String[]{tagId});
-        if (cursor.moveToFirst()) {
-          result = new String[]{cursor.getString(0), cursor.getString(1)};
-          return result;
+        cursor = null;
+        try {
+            db = getReadableDb();
+            cursor = db.rawQuery("SELECT c.name,CASE WHEN c.iconUrl IS NOT NULL AND c.iconUrl <> 'null' THEN c.iconUrl ELSE p.iconUrl END AS finalIconUrl FROM tags c LEFT JOIN tags p ON c.parentId = p.id WHERE c.id = ?", new String[]{tagId});
+            if (cursor.moveToFirst()) {
+                result = new String[]{cursor.getString(0), cursor.getString(1)};
+                return result;
+            }
+        } catch (Exception e) {
+            u.logToFile("Error loading tag details for " + tagId + ": " + e.getMessage());
+        } finally {
+            u.closeQuietly(cursor);
         }
-      } catch (Exception e) {
-          u.logToFile("Error loading tag details for " + tagId + ": " + e.getMessage());
-      }
-      finally {
-        u.closeQuietly(cursor);
-        u.closeQuietly(db);
-      }
-      return null;
+        return null;
     }
     
     getSpamCategoryDetails(categoryId) {
-      db = null;
-      cursor = null;
-      try {
-        db = getReadableDb();
-        cursor = db.rawQuery("SELECT name, icon FROM spam_categories WHERE id = ?", new String[]{String.valueOf(categoryId)});
-        if (cursor.moveToFirst()) {
-          result = new String[]{cursor.getString(0), cursor.getString(1)};
-          return result;
+        cursor = null;
+        try {
+            db = getReadableDb();
+            cursor = db.rawQuery("SELECT name, icon FROM spam_categories WHERE id = ?", new String[]{String.valueOf(categoryId)});
+            if (cursor.moveToFirst()) {
+                result = new String[]{cursor.getString(0), cursor.getString(1)};
+                return result;
+            }
+        } catch (Exception e) {
+            u.logToFile("Error loading spam category " + categoryId + ": " + e.getMessage());
+        } finally {
+            u.closeQuietly(cursor);
         }
-      } catch (Exception e) {
-          u.logToFile("Error loading spam category " + categoryId + ": " + e.getMessage());
-      }
-      finally {
-        u.closeQuietly(cursor);
-        u.closeQuietly(db);
-      }
-      return null;
+        return null;
     }
 
     getLastCall(number) {
@@ -755,52 +775,43 @@ data() {
     
     saveFilter(type, field, value, note) {
         u.logDebug("saveFilter: " + type + " " + field + "=" + value);
-        db = null;
         try {
+            normVal = value != null ? value.replace("*", "") : "";
             db = getWritableDb();
             if (note != null && !note.isEmpty()) {
                 db.execSQL("INSERT OR REPLACE INTO filters (type, field, value, norm_val, enabled, note) VALUES (?, ?, ?, ?, 1, ?)",
-                    new String[]{type, field, value, value, note});
+                    new String[]{type, field, value, normVal, note});
             } else {
                 db.execSQL("INSERT OR REPLACE INTO filters (type, field, value, norm_val, enabled) VALUES (?, ?, ?, ?, 1)",
-                    new String[]{type, field, value, value});
+                    new String[]{type, field, value, normVal});
             }
         } catch (Exception e) {
             u.logToFile("Error saving filter: " + e.getMessage());
-        } finally {
-            u.closeQuietly(db);
         }
     }
 
-    toggleFilter(value, enabled) {
-        u.logDebug("toggleFilter: " + value + " enabled=" + enabled);
-        db = null;
+    toggleFilter(field, value, enabled) {
+        u.logDebug("toggleFilter: " + field + "=" + value + " enabled=" + enabled);
         try {
             db = getWritableDb();
-            db.execSQL("UPDATE filters SET enabled = ? WHERE value = ?", new Object[]{enabled ? 1 : 0, value});
+            db.execSQL("UPDATE filters SET enabled = ? WHERE field = ? AND value = ?", new Object[]{enabled ? 1 : 0, field, value});
         } catch (Exception e) {
             u.logToFile("Error toggling filter: " + e.getMessage());
-        } finally {
-            u.closeQuietly(db);
         }
     }
 
-    deleteFilter(value) {
-        u.logDebug("deleteFilter: " + value);
-        db = null;
+    deleteFilter(field, value) {
+        u.logDebug("deleteFilter: " + field + "=" + value);
         try {
             db = getWritableDb();
-            db.execSQL("DELETE FROM filters WHERE value = ?", new String[]{value});
+            db.execSQL("DELETE FROM filters WHERE field = ? AND value = ?", new String[]{field, value});
         } catch (Exception e) {
             u.logToFile("Error deleting filter: " + e.getMessage());
-        } finally {
-            u.closeQuietly(db);
         }
     }
 
     loadFilters() {
         list = new java.util.ArrayList();
-        db = null;
         cursor = null;
         try {
             db = getReadableDb();
@@ -818,14 +829,12 @@ data() {
             u.logToFile("Error loading filters: " + e.getMessage());
         } finally {
             u.closeQuietly(cursor);
-            u.closeQuietly(db);
         }
         return list;
     }
 
     loadFilterContacts() {
         list = new java.util.ArrayList();
-        db = null;
         cursor = null;
         try {
             db = getReadableDb();
@@ -841,7 +850,6 @@ data() {
             u.logToFile("Error loading contacts: " + e.getMessage());
         } finally {
             u.closeQuietly(cursor);
-            u.closeQuietly(db);
         }
         return list;
     }
